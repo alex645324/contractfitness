@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "857348842396",
+    "project_id": "contract-fitness",
+    "storage_bucket": "contract-fitness.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:857348842396:android:bd2c7e1c60a9afe8b4de59",
+        "android_client_info": {
+          "package_name": "com.example.contractfitness"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2rPW_uu6zY9FWlKLMfO22c7KvTHp8Y-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
