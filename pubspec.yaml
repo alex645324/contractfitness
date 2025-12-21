@@ -89,3 +89,35 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  fonts:
+    - family: SF Pro Display
+      fonts:
+        - asset: lib/fonts/SF-Pro-Display-Ultralight.otf
+          weight: 100
+        - asset: lib/fonts/SF-Pro-Display-Thin.otf
+          weight: 200
+        - asset: lib/fonts/SF-Pro-Display-Light.otf
+          weight: 300
+        - asset: lib/fonts/SF-Pro-Display-Regular.otf
+          weight: 400
+        - asset: lib/fonts/SF-Pro-Display-RegularItalic.otf
+          weight: 400
+          style: italic
+        - asset: lib/fonts/SF-Pro-Display-Medium.otf
+          weight: 500
+        - asset: lib/fonts/SF-Pro-Display-Bold.otf
+          weight: 700
+        - asset: lib/fonts/SF-Pro-Display-BoldItalic.otf
+          weight: 700
+          style: italic
+        - asset: lib/fonts/SF-Pro-Display-Heavy.otf
+          weight: 800
+        - asset: lib/fonts/SF-Pro-Display-HeavyItalic.otf
+          weight: 800
+          style: italic
+        - asset: lib/fonts/SF-Pro-Display-Black.otf
+          weight: 900
+        - asset: lib/fonts/SF-Pro-Display-BlackItalic.otf
+          weight: 900
+          style: italic

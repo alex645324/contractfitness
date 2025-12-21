@@ -9,6 +9,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Contract Fitness',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.grey),
       ),
@@ -25,24 +26,83 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  String? _userId;
+  ContractSuccess? _contract;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showSetupDialog());
   }
 
-  void _showSetupDialog() {
-    showDialog(
+  Future<void> _showSetupDialog() async {
+    final result = await showDialog<SetupSuccess>(
       context: context,
       barrierDismissible: false,
       builder: (context) => const SetupDialog(),
     );
+    if (result != null) {
+      setState(() => _userId = result.userId);
+      _loadContract();
+    }
+  }
+
+  Future<void> _loadContract() async {
+    if (_userId == null) return;
+    final result = await getActiveContract(_userId!);
+    if (result is ContractSuccess && mounted) {
+      setState(() => _contract = result);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFFC8C8C8),
+    return Scaffold(
+      backgroundColor: const Color(0xFFC8C8C8),
+      body: _contract != null
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 25),
+                    const Text(
+                      'Contracts',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 30,
+                        color: Color(0xFF3E3E3E),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.3,
+                        ),
+                        itemCount: 1,
+                        itemBuilder: (context, index) {
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: 0.9,
+                              child: ContractCard(contract: _contract!),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
     );
   }
 }
@@ -92,7 +152,7 @@ class _SetupDialogState extends State<SetupDialog> {
     if (!mounted) return;
 
     if (result is SetupSuccess) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(result);
     } else if (result is SetupFailure) {
       setState(() => _loading = false);
     }
@@ -179,6 +239,86 @@ class _SetupDialogState extends State<SetupDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class ContractCard extends StatelessWidget {
+  final ContractSuccess contract;
+  const ContractCard({super.key, required this.contract});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFCDCDD0),
+        borderRadius: BorderRadius.circular(21),
+        boxShadow: const [
+          BoxShadow(
+            offset: Offset(0, 0),
+            blurRadius: 18,
+            spreadRadius: 0,
+            color: Color.fromRGBO(99, 99, 99, 0.25),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            contract.title,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Display',
+              fontWeight: FontWeight.w500,
+              fontSize: 16,
+              color: Color(0xFF3E3E3E),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                color: const Color(0xFFB7B7B9).withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          _buildBullet('With ${contract.partnerNames.join(' and ')}'),
+          const SizedBox(height: 4),
+          _buildBullet('${contract.daysPassed}/${contract.duration}'),
+          const SizedBox(height: 4),
+          _buildBullet('Contract penalties: 0'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBullet(String text) {
+    return Row(
+      children: [
+        const Text(
+          '•  ',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+            color: Color(0xFF767678),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Display',
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Color(0xFF767678),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
