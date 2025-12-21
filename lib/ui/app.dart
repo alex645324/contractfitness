@@ -28,22 +28,21 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? _userId;
   ContractSuccess? _contract;
+  SetupSuccess? _lastSetup;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _showSetupDialog());
+    _bootstrap();
   }
 
-  Future<void> _showSetupDialog() async {
-    final result = await showDialog<SetupSuccess>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const SetupDialog(),
-    );
-    if (result != null) {
-      setState(() => _userId = result.userId);
-      _loadContract();
+  Future<void> _bootstrap() async {
+    final savedUserId = await loadSavedUserId();
+    if (!mounted) return;
+    if (savedUserId != null) {
+      setState(() => _userId = savedUserId);
+      await _loadContract();
+      return;
     }
   }
 
@@ -59,26 +58,26 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFC8C8C8),
-      body: _contract != null
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 25),
-                    const Text(
-                      'Contracts',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 30,
-                        color: Color(0xFF3E3E3E),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: GridView.builder(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 25),
+              const Text(
+                'Contracts',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 30,
+                  color: Color(0xFF3E3E3E),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: _contract != null
+                    ? GridView.builder(
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
@@ -96,25 +95,56 @@ class _HomePageState extends State<HomePage> {
                             ),
                           );
                         },
-                      ),
-                    ),
-                  ],
-                ),
+                      )
+                    : const _EmptyContracts(),
               ),
-            )
-          : null,
+              const SizedBox(height: 12),
+              SetupSection(
+                onCompleted: (result) async {
+                  setState(() {
+                    _userId = result.userId;
+                    _lastSetup = result;
+                  });
+                  await persistUserId(result.userId);
+                  await _loadContract();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
-class SetupDialog extends StatefulWidget {
-  const SetupDialog({super.key});
+class _EmptyContracts extends StatelessWidget {
+  const _EmptyContracts();
 
   @override
-  State<SetupDialog> createState() => _SetupDialogState();
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'No contracts yet',
+        style: TextStyle(
+          fontFamily: 'SF Pro Display',
+          fontWeight: FontWeight.w500,
+          fontSize: 16,
+          color: Colors.grey.shade700,
+        ),
+      ),
+    );
+  }
 }
 
-class _SetupDialogState extends State<SetupDialog> {
+class SetupSection extends StatefulWidget {
+  final ValueChanged<SetupSuccess> onCompleted;
+  const SetupSection({super.key, required this.onCompleted});
+
+  @override
+  State<SetupSection> createState() => _SetupSectionState();
+}
+
+class _SetupSectionState extends State<SetupSection> {
   final _nameController = TextEditingController();
   int _duration = 30;
   DateTime _startDate = DateTime.now();
@@ -152,7 +182,7 @@ class _SetupDialogState extends State<SetupDialog> {
     if (!mounted) return;
 
     if (result is SetupSuccess) {
-      Navigator.of(context).pop(result);
+      widget.onCompleted(result);
     } else if (result is SetupFailure) {
       setState(() => _loading = false);
     }
@@ -170,71 +200,296 @@ class _SetupDialogState extends State<SetupDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 2,
+          margin: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFB7B7B9).withOpacity(0.6),
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
           children: [
-            const Text(
-              'Create Contract',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
+            Expanded(
+              flex: 2,
+              child: _Block(
+                child: TextField(
+                  controller: _nameController,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    color: Color(0xFF3E3E3E),
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'username?',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(
+                      fontFamily: 'SF Pro Display',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 15,
+                      color: Color(0xFF8E8E93),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'Partner',
-                border: OutlineInputBorder(),
+            const SizedBox(width: 12),
+            _DurationPill(
+              label: '60',
+              selected: _duration == 60,
+              onTap: () => setState(() => _duration = 60),
+            ),
+            const SizedBox(width: 8),
+            _DurationPill(
+              label: '90',
+              selected: _duration == 90,
+              onTap: () => setState(() => _duration = 90),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _Block(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'partner?',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Display',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 14,
+                          color: Color(0xFF8E8E93),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._users
+                          .where((u) => u['name'] != _nameController.text)
+                          .map(
+                            (u) => _PartnerOption(
+                              label: u['name'] as String,
+                              selected: _selectedPartnerId == u['id'],
+                              onTap: () => setState(() => _selectedPartnerId = u['id'] as String),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
               ),
-              items: _users
-                  .where((u) => u['name'] != _nameController.text)
-                  .map((u) => DropdownMenuItem(
-                        value: u['id'] as String,
-                        child: Text(u['name'] as String),
-                      ))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedPartnerId = v),
             ),
-            const SizedBox(height: 16),
-            const Text('Contract Duration', style: TextStyle(fontSize: 14)),
-            const SizedBox(height: 8),
-            SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 30, label: Text('30')),
-                ButtonSegment(value: 60, label: Text('60')),
-                ButtonSegment(value: 90, label: Text('90')),
-              ],
-              selected: {_duration},
-              onSelectionChanged: (s) => setState(() => _duration = s.first),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: _pickDate,
-              child: Text(
-                'Start: ${_startDate.month}/${_startDate.day}/${_startDate.year}',
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Block(
+                onTap: _pickDate,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'start date?',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Display',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 14,
+                          color: Color(0xFF8E8E93),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          border: Border(
+                            bottom: BorderSide(
+                              color: const Color(0xFFB7B7B9).withOpacity(0.7),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${_startDate.month}/${_startDate.day}/${_startDate.year}',
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Display',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            color: Color(0xFF3E3E3E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Create Account'),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3E3E3E),
+              foregroundColor: const Color(0xFFCDCDD0),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            onPressed: _loading ? null : _submit,
+            child: _loading
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFCDCDD0)),
+                    ),
+                  )
+                : const Text(
+                    'continue',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Display',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Block extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Block({required this.child, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFD5D5D8),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            offset: Offset(0, 0),
+            blurRadius: 18,
+            spreadRadius: 0,
+            color: Color.fromRGBO(99, 99, 99, 0.15),
+          ),
+        ],
+      ),
+      child: child,
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: content,
+      );
+    }
+    return content;
+  }
+}
+
+class _DurationPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _DurationPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF3E3E3E) : const Color(0xFFD5D5D8),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              offset: Offset(0, 0),
+              blurRadius: 18,
+              spreadRadius: 0,
+              color: Color.fromRGBO(99, 99, 99, 0.15),
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+            color: selected ? const Color(0xFFCDCDD0) : const Color(0xFF3E3E3E),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PartnerOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PartnerOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: const Color(0xFF8E8E93),
+                  width: 1,
+                ),
+                color: selected ? const Color(0xFF3E3E3E) : Colors.transparent,
+              ),
+              child: selected
+                  ? const Icon(Icons.check, size: 14, color: Color(0xFFD5D5D8))
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'SF Pro Display',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFF3E3E3E),
+              ),
             ),
           ],
         ),

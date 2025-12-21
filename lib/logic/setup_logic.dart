@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 
 sealed class SetupResult {}
@@ -37,7 +38,7 @@ Future<SetupResult> submitSetup({
     return SetupFailure('Name is required');
   }
 
-  final userId = await createUser(name);
+  final userId = await _ensureUser(name);
 
   String? contractId;
   if (partnerId != null) {
@@ -67,4 +68,34 @@ Future<ContractResult> getActiveContract(String userId) async {
     daysPassed < 0 ? 0 : daysPassed,
     contract['duration'] as int,
   );
+}
+
+Future<String> _ensureUser(String name) async {
+  final existingId = await findUserIdByName(name);
+  if (existingId != null) return existingId;
+  return createUser(name);
+}
+
+Future<String?> findUserIdByName(String name) async {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return null;
+  final lower = trimmed.toLowerCase();
+  final users = await getUsers();
+  for (final user in users) {
+    final rawName = (user['name'] as String?) ?? '';
+    if (rawName.trim().toLowerCase() == lower) {
+      return user['id'] as String;
+    }
+  }
+  return null;
+}
+
+Future<void> persistUserId(String userId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('userId', userId);
+}
+
+Future<String?> loadSavedUserId() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('userId');
 }
