@@ -146,15 +146,20 @@ class SetupSection extends StatefulWidget {
 
 class _SetupSectionState extends State<SetupSection> {
   final _nameController = TextEditingController();
+  final _nameFocus = FocusNode();
   int _duration = 30;
   DateTime _startDate = DateTime.now();
+  late DateTime _displayedMonth;
   bool _loading = false;
   List<Map<String, dynamic>> _users = [];
   String? _selectedPartnerId;
+  bool _isHidden = false;
 
   @override
   void initState() {
     super.initState();
+    _nameFocus.addListener(_handleNameFocusChange);
+    _displayedMonth = DateTime(_startDate.year, _startDate.month);
     _loadUsers();
   }
 
@@ -163,8 +168,23 @@ class _SetupSectionState extends State<SetupSection> {
     setState(() => _users = users);
   }
 
+  void _handleNameFocusChange() {
+    if (!_nameFocus.hasFocus) {
+      _maybeAutoSubmit();
+    }
+  }
+
+  void _maybeAutoSubmit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty || _loading) return;
+    _submit();
+  }
+
   @override
   void dispose() {
+    _nameFocus
+      ..removeListener(_handleNameFocusChange)
+      ..dispose();
     _nameController.dispose();
     super.dispose();
   }
@@ -188,186 +208,290 @@ class _SetupSectionState extends State<SetupSection> {
     }
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+  List<List<DateTime>> _calendarWeeks(DateTime month) {
+    final first = DateTime(month.year, month.month, 1);
+    final start = first.subtract(Duration(days: first.weekday % 7));
+    return List.generate(
+      6,
+      (week) => List.generate(7, (day) => start.add(Duration(days: week * 7 + day))),
     );
-    if (picked != null) setState(() => _startDate = picked);
+  }
+
+  String _monthLabel(DateTime month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${months[month.month - 1]} ${month.year}';
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + delta);
+    });
+  }
+
+  void _selectDate(DateTime date) {
+    setState(() {
+      _startDate = date;
+      _displayedMonth = DateTime(date.year, date.month);
+    });
+  }
+
+  void _toggleHidden() {
+    setState(() => _isHidden = !_isHidden);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          height: 2,
-          margin: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFB7B7B9).withOpacity(0.6),
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final partnerWidth = (constraints.maxWidth - 10) / 2;
+        final partnerUsers =
+            _users.where((u) => u['name'] != _nameController.text).toList();
+        final calendarWeeks = _calendarWeeks(_displayedMonth);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 2,
-              child: _Block(
-                child: TextField(
-                  controller: _nameController,
-                  style: const TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 15,
-                    color: Color(0xFF3E3E3E),
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'username?',
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontWeight: FontWeight.w400,
-                      fontSize: 15,
-                      color: Color(0xFF8E8E93),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            GestureDetector(
+              onTap: _toggleHidden,
+              child: Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 170,
+                  height: 8,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFB7B7B9).withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            _DurationPill(
-              label: '60',
-              selected: _duration == 60,
-              onTap: () => setState(() => _duration = 60),
-            ),
-            const SizedBox(width: 8),
-            _DurationPill(
-              label: '90',
-              selected: _duration == 90,
-              onTap: () => setState(() => _duration = 90),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _Block(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'partner?',
-                        style: TextStyle(
+            if (!_isHidden) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  SizedBox(
+                    width: partnerWidth,
+                    child: _Block(
+                      child: TextField(
+                        controller: _nameController,
+                        focusNode: _nameFocus,
+                        onEditingComplete: _maybeAutoSubmit,
+                        onSubmitted: (_) => _maybeAutoSubmit(),
+                        style: const TextStyle(
                           fontFamily: 'SF Pro Display',
-                          fontWeight: FontWeight.w400,
-                          fontSize: 14,
-                          color: Color(0xFF8E8E93),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                          color: Color(0xFF3E3E3E),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._users
-                          .where((u) => u['name'] != _nameController.text)
-                          .map(
-                            (u) => _PartnerOption(
-                              label: u['name'] as String,
-                              selected: _selectedPartnerId == u['id'],
-                              onTap: () => setState(() => _selectedPartnerId = u['id'] as String),
-                            ),
-                          ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _Block(
-                onTap: _pickDate,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'start date?',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          fontWeight: FontWeight.w400,
-                          fontSize: 14,
-                          color: Color(0xFF8E8E93),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: const Color(0xFFB7B7B9).withOpacity(0.7),
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '${_startDate.month}/${_startDate.day}/${_startDate.year}',
-                          style: const TextStyle(
+                        decoration: const InputDecoration(
+                          hintText: 'username?',
+                          border: InputBorder.none,
+                          hintStyle: TextStyle(
                             fontFamily: 'SF Pro Display',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                            color: Color(0xFF3E3E3E),
+                            fontWeight: FontWeight.w400,
+                            fontSize: 15,
+                            color: Color(0xFF8E8E93),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  _DurationPill(
+                    label: '60',
+                    selected: _duration == 60,
+                    onTap: () => setState(() => _duration = 60),
+                  ),
+                  const SizedBox(width: 8),
+                  _DurationPill(
+                    label: '90',
+                    selected: _duration == 90,
+                    onTap: () => setState(() => _duration = 90),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _Block(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'partner?',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Display',
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: 14,
+                                  color: Color(0xFF8E8E93),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                height: 90,
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  itemCount: partnerUsers.length,
+                                  itemBuilder: (context, index) {
+                                    final user = partnerUsers[index];
+                                    return _PartnerOption(
+                                      label: user['name'] as String,
+                                      selected: _selectedPartnerId == user['id'],
+                                      onTap: () => setState(
+                                        () => _selectedPartnerId = user['id'] as String,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _Block(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                    alignment: Alignment.topCenter,
+                                    icon: const Icon(
+                                      Icons.chevron_left,
+                                      size: 18,
+                                      color: Color(0xFF3E3E3E),
+                                    ),
+                                    onPressed: () => _changeMonth(-1),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _monthLabel(_displayedMonth),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontFamily: 'SF Pro Display',
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                      color: Color(0xFF3E3E3E),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                    alignment: Alignment.topCenter,
+                                    icon: const Icon(
+                                      Icons.chevron_right,
+                                      size: 18,
+                                      color: Color(0xFF3E3E3E),
+                                    ),
+                                    onPressed: () => _changeMonth(1),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              SizedBox(
+                                height: 90,
+                                child: Builder(
+                                  builder: (context) {
+                                    return ListView.builder(
+                                      padding: EdgeInsets.zero,
+                                      itemCount: calendarWeeks.length,
+                                      itemBuilder: (context, weekIndex) {
+                                        final week = calendarWeeks[weekIndex];
+                                        return Row(
+                                          children: week.map((day) {
+                                            final inMonth =
+                                                day.month == _displayedMonth.month;
+                                            final isSelected =
+                                                day.year == _startDate.year &&
+                                                day.month == _startDate.month &&
+                                                day.day == _startDate.day;
+                                            return Expanded(
+                                              child: GestureDetector(
+                                                onTap: () => _selectDate(day),
+                                                child: Container(
+                                                  height: 22,
+                                                  margin:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: isSelected
+                                                        ? const Color(0xFF3E3E3E)
+                                                        : Colors.transparent,
+                                                    borderRadius:
+                                                        BorderRadius.circular(6),
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: Text(
+                                                    '${day.day}',
+                                                    style: TextStyle(
+                                                      fontFamily: 'SF Pro Display',
+                                                      fontWeight: FontWeight.w500,
+                                                      fontSize: 12,
+                                                      color: isSelected
+                                                          ? const Color(0xFFCDCDD0)
+                                                          : inMonth
+                                                              ? const Color(0xFF3E3E3E)
+                                                              : const Color(0xFFB7B7B9),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+              const SizedBox(height: 24),
+            ],
           ],
-        ),
-        const SizedBox(height: 14),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3E3E3E),
-              foregroundColor: const Color(0xFFCDCDD0),
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
-            onPressed: _loading ? null : _submit,
-            child: _loading
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFCDCDD0)),
-                    ),
-                  )
-                : const Text(
-                    'continue',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -383,14 +507,6 @@ class _Block extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFD5D5D8),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            offset: Offset(0, 0),
-            blurRadius: 18,
-            spreadRadius: 0,
-            color: Color.fromRGBO(99, 99, 99, 0.15),
-          ),
-        ],
       ),
       child: child,
     );
@@ -425,14 +541,6 @@ class _DurationPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF3E3E3E) : const Color(0xFFD5D5D8),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              offset: Offset(0, 0),
-              blurRadius: 18,
-              spreadRadius: 0,
-              color: Color.fromRGBO(99, 99, 99, 0.15),
-            ),
-          ],
         ),
         child: Text(
           label,
@@ -508,14 +616,10 @@ class ContractCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFCDCDD0),
         borderRadius: BorderRadius.circular(21),
-        boxShadow: const [
-          BoxShadow(
-            offset: Offset(0, 0),
-            blurRadius: 18,
-            spreadRadius: 0,
-            color: Color.fromRGBO(99, 99, 99, 0.25),
-          ),
-        ],
+        border: Border.all(
+          color: const Color(0xFFB7B7B9).withOpacity(0.7),
+          width: 2,
+        ),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -533,9 +637,9 @@ class ContractCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Container(
-              height: 3,
+              height: 2,
               decoration: BoxDecoration(
-                color: const Color(0xFFB7B7B9).withOpacity(0.5),
+                color: const Color(0xFFB7B7B9).withOpacity(0.7),
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
