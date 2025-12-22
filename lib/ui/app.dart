@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import '../logic/setup_logic.dart';
 
+const Color _backgroundColor = Color(0xFFD8D8D8);
+const Color _surfaceColor = Color(0xFFE0E0E0);
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -57,7 +60,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFC8C8C8),
+      backgroundColor: _backgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -149,6 +152,7 @@ class _SetupSectionState extends State<SetupSection> {
   final _nameFocus = FocusNode();
   int _duration = 30;
   DateTime _startDate = DateTime.now();
+  late DateTime _initialStartDate;
   late DateTime _displayedMonth;
   bool _loading = false;
   List<Map<String, dynamic>> _users = [];
@@ -158,7 +162,7 @@ class _SetupSectionState extends State<SetupSection> {
   @override
   void initState() {
     super.initState();
-    _nameFocus.addListener(_handleNameFocusChange);
+    _initialStartDate = _startDate;
     _displayedMonth = DateTime(_startDate.year, _startDate.month);
     _loadUsers();
   }
@@ -168,32 +172,33 @@ class _SetupSectionState extends State<SetupSection> {
     setState(() => _users = users);
   }
 
-  void _handleNameFocusChange() {
-    if (!_nameFocus.hasFocus) {
-      _maybeAutoSubmit();
-    }
-  }
-
-  void _maybeAutoSubmit() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty || _loading) return;
-    _submit();
-  }
-
   @override
   void dispose() {
-    _nameFocus
-      ..removeListener(_handleNameFocusChange)
-      ..dispose();
+    _nameFocus.dispose();
     _nameController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    final trimmedName = _nameController.text.trim();
+    final durationChanged = _duration != 30;
+    final startDateChanged = _startDate.year != _initialStartDate.year ||
+        _startDate.month != _initialStartDate.month ||
+        _startDate.day != _initialStartDate.day;
+    final partnerSelected = _selectedPartnerId != null;
+    final anyAdditional = durationChanged || startDateChanged || partnerSelected;
+    final fullSetup =
+        trimmedName.isNotEmpty && durationChanged && startDateChanged && partnerSelected;
+
+    if (anyAdditional && !fullSetup) {
+      setState(() => _loading = false);
+      return;
+    }
+
     setState(() => _loading = true);
 
     final result = await submitSetup(
-      name: _nameController.text,
+      name: trimmedName,
       partnerId: _selectedPartnerId,
       duration: _duration,
       startDate: _startDate,
@@ -257,8 +262,11 @@ class _SetupSectionState extends State<SetupSection> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final partnerWidth = (constraints.maxWidth - 10) / 2;
-        final partnerUsers =
-            _users.where((u) => u['name'] != _nameController.text).toList();
+        final currentName = _nameController.text.trim().toLowerCase();
+        final partnerUsers = _users.where((u) {
+          final rawName = (u['name'] as String?) ?? '';
+          return rawName.trim().toLowerCase() != currentName;
+        }).toList();
         final calendarWeeks = _calendarWeeks(_displayedMonth);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +288,10 @@ class _SetupSectionState extends State<SetupSection> {
             ),
             if (!_isHidden) ...[
               const SizedBox(height: 4),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   SizedBox(
                     width: partnerWidth,
@@ -288,8 +299,6 @@ class _SetupSectionState extends State<SetupSection> {
                       child: TextField(
                         controller: _nameController,
                         focusNode: _nameFocus,
-                        onEditingComplete: _maybeAutoSubmit,
-                        onSubmitted: (_) => _maybeAutoSubmit(),
                         style: const TextStyle(
                           fontFamily: 'SF Pro Display',
                           fontWeight: FontWeight.w500,
@@ -313,17 +322,20 @@ class _SetupSectionState extends State<SetupSection> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
                   _DurationPill(
                     label: '60',
                     selected: _duration == 60,
                     onTap: () => setState(() => _duration = 60),
                   ),
-                  const SizedBox(width: 8),
                   _DurationPill(
                     label: '90',
                     selected: _duration == 90,
                     onTap: () => setState(() => _duration = 90),
+                  ),
+                  _DurationPill(
+                    label: 'Confirm',
+                    selected: false,
+                    onTap: _submit,
                   ),
                 ],
               ),
@@ -505,7 +517,7 @@ class _Block extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFD5D5D8),
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
       ),
       child: child,
@@ -539,7 +551,7 @@ class _DurationPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF3E3E3E) : const Color(0xFFD5D5D8),
+          color: selected ? const Color(0xFF3E3E3E) : _surfaceColor,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
@@ -614,12 +626,15 @@ class ContractCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFCDCDD0),
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(21),
-        border: Border.all(
-          color: const Color(0xFFB7B7B9).withOpacity(0.7),
-          width: 2,
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 0),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -637,9 +652,9 @@ class ContractCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Container(
-              height: 2,
+              height: 1.8,
               decoration: BoxDecoration(
-                color: const Color(0xFFB7B7B9).withOpacity(0.7),
+                color: const Color(0xFFCACACC).withOpacity(0.7),
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
