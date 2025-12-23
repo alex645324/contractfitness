@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 
@@ -91,11 +92,66 @@ Future<String?> findUserIdByName(String name) async {
 }
 
 Future<void> persistUserId(String userId) async {
+  debugPrint('[persistUserId] Saving userId: $userId');
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('userId', userId);
+  debugPrint('[persistUserId] Saved successfully');
 }
 
 Future<String?> loadSavedUserId() async {
+  debugPrint('[loadSavedUserId] Loading...');
   final prefs = await SharedPreferences.getInstance();
-  return prefs.getString('userId');
+  final userId = prefs.getString('userId');
+  debugPrint('[loadSavedUserId] Got userId: $userId');
+  return userId;
+}
+
+Future<String?> getUserNameById(String userId) async {
+  final users = await getUsersByIds([userId]);
+  if (users.isEmpty) return null;
+  return users.first['name'] as String?;
+}
+
+String _formatDate(DateTime date) {
+  final y = date.year.toString();
+  final m = date.month.toString().padLeft(2, '0');
+  final d = date.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
+
+String todayDocId(String userId) {
+  return '${userId}_${_formatDate(DateTime.now())}';
+}
+
+String yesterdayDocId(String userId) {
+  final yesterday = DateTime.now().subtract(const Duration(days: 1));
+  return '${userId}_${_formatDate(yesterday)}';
+}
+
+Future<void> checkYesterdayPenalty(String userId) async {
+  final docId = yesterdayDocId(userId);
+  final actions = await getDailyActions(docId);
+
+  // If no record or incomplete, apply penalty
+  final complete = actions != null &&
+      actions['train'] == true &&
+      actions['nutrition'] == true &&
+      actions['sleep'] == true;
+
+  if (!complete) {
+    final contracts = await getContractsByUserId(userId);
+    for (final contract in contracts) {
+      final contractId = contract['id'] as String;
+      await updateContractProgress(contractId, -1);
+      await incrementContractPenalties(contractId);
+    }
+  }
+}
+
+Future<void> completeDailyActions(String userId) async {
+  final contracts = await getContractsByUserId(userId);
+  for (final contract in contracts) {
+    final contractId = contract['id'] as String;
+    await updateContractProgress(contractId, 1);
+  }
 }

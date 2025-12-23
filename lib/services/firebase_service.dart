@@ -48,3 +48,30 @@ Future<List<Map<String, dynamic>>> getUsersByIds(List<String> userIds) async {
       .get();
   return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
 }
+
+Future<void> saveDailyActions(String documentId, Map<String, bool> actions) async {
+  await _firestore.collection('dailyActions').doc(documentId).set(actions);
+}
+
+Future<Map<String, bool>?> getDailyActions(String documentId) async {
+  final doc = await _firestore.collection('dailyActions').doc(documentId).get();
+  if (!doc.exists) return null;
+  final data = doc.data()!;
+  return {
+    'train': data['train'] as bool? ?? false,
+    'nutrition': data['nutrition'] as bool? ?? false,
+    'sleep': data['sleep'] as bool? ?? false,
+  };
+}
+
+Future<void> updateContractProgress(String contractId, int delta) async {
+  await _firestore.collection('contracts').doc(contractId).update({
+    'progress': FieldValue.increment(delta),
+  });
+}
+
+Future<void> incrementContractPenalties(String contractId) async {
+  await _firestore.collection('contracts').doc(contractId).update({
+    'penalties': FieldValue.increment(1),
+  });
+}

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../services/firebase_service.dart';
 import '../logic/setup_logic.dart';
 
@@ -32,6 +33,9 @@ class _HomePageState extends State<HomePage> {
   String? _userId;
   ContractSuccess? _contract;
   SetupSuccess? _lastSetup;
+  final _pageController = PageController();
+  int _currentPage = 0;
+  bool _isHidden = false;
 
   @override
   void initState() {
@@ -39,11 +43,19 @@ class _HomePageState extends State<HomePage> {
     _bootstrap();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   Future<void> _bootstrap() async {
     final savedUserId = await loadSavedUserId();
+    debugPrint('[HomePage] Loaded savedUserId: $savedUserId');
     if (!mounted) return;
     if (savedUserId != null) {
       setState(() => _userId = savedUserId);
+      await checkYesterdayPenalty(savedUserId);
       await _loadContract();
       return;
     }
@@ -101,17 +113,99 @@ class _HomePageState extends State<HomePage> {
                       )
                     : const _EmptyContracts(),
               ),
-              const SizedBox(height: 12),
-              SetupSection(
-                onCompleted: (result) async {
-                  setState(() {
-                    _userId = result.userId;
-                    _lastSetup = result;
-                  });
-                  await persistUserId(result.userId);
-                  await _loadContract();
-                },
+              if (_userId != null && _contract == null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          _pageController.animateToPage(0,
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.ease);
+                        },
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _currentPage == 0
+                                ? const Color(0xFF3E3E3E)
+                                : const Color(0xFFB7B7B9),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          _pageController.animateToPage(1,
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.ease);
+                        },
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _currentPage == 1
+                                ? const Color(0xFF3E3E3E)
+                                : const Color(0xFFB7B7B9),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Center(
+                child: GestureDetector(
+                  onTap: () => setState(() => _isHidden = !_isHidden),
+                  child: Container(
+                    width: 170,
+                    height: 8,
+                    margin: const EdgeInsets.only(top: 8, bottom: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFB7B7B9).withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
               ),
+              if (!_isHidden)
+                SizedBox(
+                  height: 210,
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                      },
+                    ),
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: (page) => setState(() => _currentPage = page),
+                      children: [
+                        SetupSection(
+                          savedUserId: _userId,
+                          onCompleted: (result) async {
+                            setState(() {
+                              _userId = result.userId;
+                              _lastSetup = result;
+                            });
+                            await persistUserId(result.userId);
+                            await _loadContract();
+                          },
+                        ),
+                        if (_userId != null)
+                          DailyActionsSection(
+                            userId: _userId!,
+                            onProgressUpdated: _loadContract,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -141,7 +235,8 @@ class _EmptyContracts extends StatelessWidget {
 
 class SetupSection extends StatefulWidget {
   final ValueChanged<SetupSuccess> onCompleted;
-  const SetupSection({super.key, required this.onCompleted});
+  final String? savedUserId;
+  const SetupSection({super.key, required this.onCompleted, this.savedUserId});
 
   @override
   State<SetupSection> createState() => _SetupSectionState();
@@ -157,7 +252,8 @@ class _SetupSectionState extends State<SetupSection> {
   bool _loading = false;
   List<Map<String, dynamic>> _users = [];
   String? _selectedPartnerId;
-  bool _isHidden = false;
+  bool _accountLocked = false;
+  bool _confirmPressed = false;
 
   @override
   void initState() {
@@ -165,11 +261,33 @@ class _SetupSectionState extends State<SetupSection> {
     _initialStartDate = _startDate;
     _displayedMonth = DateTime(_startDate.year, _startDate.month);
     _loadUsers();
+    _restoreLockedState();
+  }
+
+  Future<void> _restoreLockedState() async {
+    debugPrint('[SetupSection] Restoring state, savedUserId: ${widget.savedUserId}');
+    if (widget.savedUserId == null) return;
+    final name = await getUserNameById(widget.savedUserId!);
+    debugPrint('[SetupSection] Fetched userName: $name');
+    if (!mounted || name == null) return;
+    setState(() {
+      _nameController.text = name;
+      _accountLocked = true;
+    });
+    debugPrint('[SetupSection] State restored - accountLocked: $_accountLocked');
   }
 
   Future<void> _loadUsers() async {
     final users = await getUsers();
     setState(() => _users = users);
+  }
+
+  @override
+  void didUpdateWidget(SetupSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.savedUserId == null && widget.savedUserId != null) {
+      _restoreLockedState();
+    }
   }
 
   @override
@@ -179,36 +297,87 @@ class _SetupSectionState extends State<SetupSection> {
     super.dispose();
   }
 
+  Future<void> _handleConfirm() async {
+    setState(() => _confirmPressed = true);
+    await _submit();
+    if (mounted) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      setState(() => _confirmPressed = false);
+    }
+  }
+
   Future<void> _submit() async {
     final trimmedName = _nameController.text.trim();
+    debugPrint('[SetupSection] _submit called - accountLocked: $_accountLocked, name: $trimmedName');
+
+    // Case 1: Account not locked - create account only
+    if (!_accountLocked) {
+      if (trimmedName.isEmpty) {
+        debugPrint('[SetupSection] Empty name, returning');
+        return;
+      }
+      setState(() => _loading = true);
+      debugPrint('[SetupSection] Creating account...');
+      final result = await submitSetup(
+        name: trimmedName,
+        partnerId: null,
+        duration: _duration,
+        startDate: _startDate,
+      );
+      if (!mounted) return;
+      if (result is SetupSuccess) {
+        debugPrint('[SetupSection] Account created - userId: ${result.userId}');
+        await persistUserId(result.userId);
+        setState(() {
+          _accountLocked = true;
+          _loading = false;
+        });
+        await _loadUsers();
+      } else if (result is SetupFailure) {
+        debugPrint('[SetupSection] Account creation failed: ${result.message}');
+        setState(() => _loading = false);
+      }
+      return;
+    }
+
+    // Case 2: Account locked - create contract
     final durationChanged = _duration != 30;
     final startDateChanged = _startDate.year != _initialStartDate.year ||
         _startDate.month != _initialStartDate.month ||
         _startDate.day != _initialStartDate.day;
     final partnerSelected = _selectedPartnerId != null;
-    final anyAdditional = durationChanged || startDateChanged || partnerSelected;
-    final fullSetup =
-        trimmedName.isNotEmpty && durationChanged && startDateChanged && partnerSelected;
 
-    if (anyAdditional && !fullSetup) {
-      setState(() => _loading = false);
+    debugPrint('[SetupSection] Contract check - duration: $durationChanged, date: $startDateChanged, partner: $partnerSelected');
+
+    if (!durationChanged || !startDateChanged || !partnerSelected) {
+      debugPrint('[SetupSection] Incomplete fields, returning');
       return;
     }
 
     setState(() => _loading = true);
-
+    debugPrint('[SetupSection] Creating contract...');
     final result = await submitSetup(
       name: trimmedName,
       partnerId: _selectedPartnerId,
       duration: _duration,
       startDate: _startDate,
     );
-
     if (!mounted) return;
 
     if (result is SetupSuccess) {
+      debugPrint('[SetupSection] Contract created - contractId: ${result.contractId}');
       widget.onCompleted(result);
+      // Reset for next contract
+      setState(() {
+        _selectedPartnerId = null;
+        _duration = 30;
+        _startDate = DateTime.now();
+        _initialStartDate = _startDate;
+        _displayedMonth = DateTime(_startDate.year, _startDate.month);
+        _loading = false;
+      });
     } else if (result is SetupFailure) {
+      debugPrint('[SetupSection] Contract creation failed: ${result.message}');
       setState(() => _loading = false);
     }
   }
@@ -253,10 +422,6 @@ class _SetupSectionState extends State<SetupSection> {
     });
   }
 
-  void _toggleHidden() {
-    setState(() => _isHidden = !_isHidden);
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -271,23 +436,6 @@ class _SetupSectionState extends State<SetupSection> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: _toggleHidden,
-              child: Align(
-                alignment: Alignment.center,
-                child: Container(
-                  width: 170,
-                  height: 8,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFB7B7B9).withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            if (!_isHidden) ...[
-              const SizedBox(height: 4),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -299,24 +447,39 @@ class _SetupSectionState extends State<SetupSection> {
                       child: TextField(
                         controller: _nameController,
                         focusNode: _nameFocus,
+                        enabled: !_accountLocked,
                         style: const TextStyle(
                           fontFamily: 'SF Pro Display',
                           fontWeight: FontWeight.w500,
                           fontSize: 15,
                           color: Color(0xFF3E3E3E),
                         ),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'username?',
                           border: InputBorder.none,
-                          hintStyle: TextStyle(
+                          hintStyle: const TextStyle(
                             fontFamily: 'SF Pro Display',
                             fontWeight: FontWeight.w400,
                             fontSize: 15,
                             color: Color(0xFF8E8E93),
                           ),
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 12,
+                          ),
+                          suffixIcon: _accountLocked
+                              ? const Padding(
+                                  padding: EdgeInsets.only(right: 12),
+                                  child: Icon(
+                                    Icons.lock,
+                                    size: 18,
+                                    color: Color(0xFF3E3E3E),
+                                  ),
+                                )
+                              : null,
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 0,
+                            minHeight: 0,
                           ),
                         ),
                       ),
@@ -334,8 +497,8 @@ class _SetupSectionState extends State<SetupSection> {
                   ),
                   _DurationPill(
                     label: 'Confirm',
-                    selected: false,
-                    onTap: _submit,
+                    selected: _confirmPressed,
+                    onTap: _handleConfirm,
                   ),
                 ],
               ),
@@ -499,8 +662,6 @@ class _SetupSectionState extends State<SetupSection> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-            ],
           ],
         );
       },
@@ -693,6 +854,141 @@ class ContractCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class DailyActionsSection extends StatefulWidget {
+  final String userId;
+  final VoidCallback onProgressUpdated;
+  const DailyActionsSection({
+    super.key,
+    required this.userId,
+    required this.onProgressUpdated,
+  });
+
+  @override
+  State<DailyActionsSection> createState() => _DailyActionsSectionState();
+}
+
+class _DailyActionsSectionState extends State<DailyActionsSection> {
+  bool _train = false;
+  bool _nutrition = false;
+  bool _sleep = false;
+  bool _completed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTodayActions();
+  }
+
+  Future<void> _loadTodayActions() async {
+    final docId = todayDocId(widget.userId);
+    final actions = await getDailyActions(docId);
+    if (!mounted) return;
+    if (actions != null) {
+      setState(() {
+        _train = actions['train'] ?? false;
+        _nutrition = actions['nutrition'] ?? false;
+        _sleep = actions['sleep'] ?? false;
+        _completed = _train && _nutrition && _sleep;
+      });
+    }
+  }
+
+  Future<void> _toggle(String key, bool value) async {
+    if (_completed) return;
+    setState(() {
+      if (key == 'train') _train = value;
+      if (key == 'nutrition') _nutrition = value;
+      if (key == 'sleep') _sleep = value;
+    });
+
+    await saveDailyActions(todayDocId(widget.userId), {
+      'train': _train,
+      'nutrition': _nutrition,
+      'sleep': _sleep,
+    });
+
+    if (_train && _nutrition && _sleep) {
+      setState(() => _completed = true);
+      await completeDailyActions(widget.userId);
+      widget.onProgressUpdated();
+    }
+  }
+
+  int get _count => (_train ? 1 : 0) + (_nutrition ? 1 : 0) + (_sleep ? 1 : 0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAction('Train hard', _train, (v) => _toggle('train', v)),
+            _buildAction('Nutrition', _nutrition, (v) => _toggle('nutrition', v)),
+            _buildAction('Sleep', _sleep, (v) => _toggle('sleep', v)),
+          ],
+        ),
+        const Spacer(),
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFF3E3E3E), width: 3),
+          ),
+          child: Center(
+            child: Text(
+              '$_count/3',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Display',
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Color(0xFF3E3E3E),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAction(String label, bool checked, ValueChanged<bool> onChanged) {
+    return GestureDetector(
+      onTap: () => onChanged(!checked),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF8E8E93), width: 1.5),
+                color: checked ? const Color(0xFF3E3E3E) : Colors.transparent,
+              ),
+              child: checked
+                  ? const Icon(Icons.check, size: 18, color: Color(0xFFD5D5D8))
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'SF Pro Display',
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+                color: Color(0xFF3E3E3E),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
