@@ -15,11 +15,10 @@ Future<List<Map<String, dynamic>>> getUsers() async {
   return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
 }
 
-Future<String> createContract(List<String> userIds, int duration, DateTime startDate) async {
+Future<String> createContract(List<String> userIds, int duration) async {
   final doc = await _firestore.collection('contracts').add({
     'userIds': userIds,
     'duration': duration,
-    'startDate': Timestamp.fromDate(startDate),
     'createdAt': FieldValue.serverTimestamp(),
   });
 
@@ -73,5 +72,30 @@ Future<void> updateContractProgress(String contractId, int delta) async {
 Future<void> incrementContractPenalties(String contractId) async {
   await _firestore.collection('contracts').doc(contractId).update({
     'penalties': FieldValue.increment(1),
+  });
+}
+
+Future<DateTime> getServerDate() async {
+  final tempDoc = _firestore.collection('_temp').doc();
+  await tempDoc.set({'t': FieldValue.serverTimestamp()});
+  final snap = await tempDoc.get();
+  await tempDoc.delete();
+  final timestamp = snap.data()!['t'] as Timestamp;
+  final dt = timestamp.toDate();
+  return DateTime(dt.year, dt.month, dt.day);
+}
+
+Future<DateTime?> getUserLastActiveDate(String userId) async {
+  final doc = await _firestore.collection('users').doc(userId).get();
+  final data = doc.data();
+  if (data == null || data['lastActiveDate'] == null) return null;
+  final timestamp = data['lastActiveDate'] as Timestamp;
+  final dt = timestamp.toDate();
+  return DateTime(dt.year, dt.month, dt.day);
+}
+
+Future<void> setUserLastActiveDate(String userId, DateTime date) async {
+  await _firestore.collection('users').doc(userId).update({
+    'lastActiveDate': Timestamp.fromDate(date),
   });
 }

@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
@@ -11,9 +10,10 @@ class ContractSuccess extends ContractResult {
   final String id;
   final String title;
   final List<String> partnerNames;
-  final int daysPassed;
+  final int progress;
   final int duration;
-  ContractSuccess(this.id, this.title, this.partnerNames, this.daysPassed, this.duration);
+  final int penalties;
+  ContractSuccess(this.id, this.title, this.partnerNames, this.progress, this.duration, this.penalties);
 }
 
 class ContractNotFound extends ContractResult {}
@@ -33,7 +33,6 @@ Future<SetupResult> submitSetup({
   required String name,
   String? partnerId,
   required int duration,
-  required DateTime startDate,
 }) async {
   if (name.isEmpty) {
     return SetupFailure('Name is required');
@@ -43,7 +42,7 @@ Future<SetupResult> submitSetup({
 
   String? contractId;
   if (partnerId != null) {
-    contractId = await createContract([userId, partnerId], duration, startDate);
+    contractId = await createContract([userId, partnerId], duration);
   }
 
   return SetupSuccess(userId, contractId);
@@ -59,15 +58,16 @@ Future<ContractResult> getActiveContract(String userId) async {
   final partners = await getUsersByIds(partnerIds);
   final partnerNames = partners.map((p) => p['name'] as String).toList();
 
-  final startDate = (contract['startDate'] as Timestamp).toDate();
-  final daysPassed = DateTime.now().difference(startDate).inDays;
+  final progress = (contract['progress'] as int?) ?? 0;
+  final penalties = (contract['penalties'] as int?) ?? 0;
 
   return ContractSuccess(
     contract['id'] as String,
     'Body #${contract['id'].toString().substring(0, 2).toUpperCase()}',
     partnerNames,
-    daysPassed < 0 ? 0 : daysPassed,
+    progress,
     contract['duration'] as int,
+    penalties,
   );
 }
 
@@ -119,33 +119,41 @@ String _formatDate(DateTime date) {
   return '$y-$m-$d';
 }
 
-String todayDocId(String userId) {
-  return '${userId}_${_formatDate(DateTime.now())}';
+String docIdForDate(String userId, DateTime date) {
+  return '${userId}_${_formatDate(date)}';
 }
 
-String yesterdayDocId(String userId) {
-  final yesterday = DateTime.now().subtract(const Duration(days: 1));
-  return '${userId}_${_formatDate(yesterday)}';
-}
+Future<DateTime> checkDayTransition(String userId) async {
+  final serverDate = await getServerDate();
+  final lastActive = await getUserLastActiveDate(userId);
 
-Future<void> checkYesterdayPenalty(String userId) async {
-  final docId = yesterdayDocId(userId);
-  final actions = await getDailyActions(docId);
+  if (lastActive != null && lastActive.isBefore(serverDate)) {
+    // Process each missed day
+    var checkDate = lastActive;
+    while (checkDate.isBefore(serverDate)) {
+      final docId = docIdForDate(userId, checkDate);
+      final actions = await getDailyActions(docId);
 
-  // If no record or incomplete, apply penalty
-  final complete = actions != null &&
-      actions['train'] == true &&
-      actions['nutrition'] == true &&
-      actions['sleep'] == true;
+      final complete = actions != null &&
+          actions['train'] == true &&
+          actions['nutrition'] == true &&
+          actions['sleep'] == true;
 
-  if (!complete) {
-    final contracts = await getContractsByUserId(userId);
-    for (final contract in contracts) {
-      final contractId = contract['id'] as String;
-      await updateContractProgress(contractId, -1);
-      await incrementContractPenalties(contractId);
+      if (!complete) {
+        final contracts = await getContractsByUserId(userId);
+        for (final contract in contracts) {
+          final contractId = contract['id'] as String;
+          await updateContractProgress(contractId, -1);
+          await incrementContractPenalties(contractId);
+        }
+      }
+
+      checkDate = checkDate.add(const Duration(days: 1));
     }
   }
+
+  await setUserLastActiveDate(userId, serverDate);
+  return serverDate;
 }
 
 Future<void> completeDailyActions(String userId) async {

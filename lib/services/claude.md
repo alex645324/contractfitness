@@ -14,10 +14,10 @@ External service integrations layer.
 - `getUsersByIds(userIds)` - Batch fetch users by document IDs
 
 ### Contracts
-- `createContract(userIds, duration, startDate)` - Creates contract and updates user documents with contract reference
+- `createContract(userIds, duration)` - Creates contract and updates user documents with contract reference
 - `getContractsByUserId(userId)` - Queries contracts containing the user
 
 ## Firestore Collections
 
 - `users` - User documents with name, createdAt, contractIds
-- `contracts` - Contract documents with userIds, duration, startDate, createdAt
+- `contracts` - Contract documents with userIds, duration, createdAt

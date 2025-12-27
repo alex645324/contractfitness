@@ -31,6 +31,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   String? _userId;
+  DateTime? _serverDate;
   ContractSuccess? _contract;
   SetupSuccess? _lastSetup;
   final _pageController = PageController();
@@ -54,8 +55,12 @@ class _HomePageState extends State<HomePage> {
     debugPrint('[HomePage] Loaded savedUserId: $savedUserId');
     if (!mounted) return;
     if (savedUserId != null) {
-      setState(() => _userId = savedUserId);
-      await checkYesterdayPenalty(savedUserId);
+      final serverDate = await checkDayTransition(savedUserId);
+      if (!mounted) return;
+      setState(() {
+        _userId = savedUserId;
+        _serverDate = serverDate;
+      });
       await _loadContract();
       return;
     }
@@ -197,9 +202,10 @@ class _HomePageState extends State<HomePage> {
                             await _loadContract();
                           },
                         ),
-                        if (_userId != null)
+                        if (_userId != null && _serverDate != null)
                           DailyActionsSection(
                             userId: _userId!,
+                            serverDate: _serverDate!,
                             onProgressUpdated: _loadContract,
                           ),
                       ],
@@ -246,20 +252,16 @@ class _SetupSectionState extends State<SetupSection> {
   final _nameController = TextEditingController();
   final _nameFocus = FocusNode();
   int _duration = 30;
-  DateTime _startDate = DateTime.now();
-  late DateTime _initialStartDate;
-  late DateTime _displayedMonth;
   bool _loading = false;
   List<Map<String, dynamic>> _users = [];
   String? _selectedPartnerId;
   bool _accountLocked = false;
   bool _confirmPressed = false;
+  bool _isLoginMode = false;
 
   @override
   void initState() {
     super.initState();
-    _initialStartDate = _startDate;
-    _displayedMonth = DateTime(_startDate.year, _startDate.month);
     _loadUsers();
     _restoreLockedState();
   }
@@ -322,7 +324,6 @@ class _SetupSectionState extends State<SetupSection> {
         name: trimmedName,
         partnerId: null,
         duration: _duration,
-        startDate: _startDate,
       );
       if (!mounted) return;
       if (result is SetupSuccess) {
@@ -342,14 +343,11 @@ class _SetupSectionState extends State<SetupSection> {
 
     // Case 2: Account locked - create contract
     final durationChanged = _duration != 30;
-    final startDateChanged = _startDate.year != _initialStartDate.year ||
-        _startDate.month != _initialStartDate.month ||
-        _startDate.day != _initialStartDate.day;
     final partnerSelected = _selectedPartnerId != null;
 
-    debugPrint('[SetupSection] Contract check - duration: $durationChanged, date: $startDateChanged, partner: $partnerSelected');
+    debugPrint('[SetupSection] Contract check - duration: $durationChanged, partner: $partnerSelected');
 
-    if (!durationChanged || !startDateChanged || !partnerSelected) {
+    if (!durationChanged || !partnerSelected) {
       debugPrint('[SetupSection] Incomplete fields, returning');
       return;
     }
@@ -360,7 +358,6 @@ class _SetupSectionState extends State<SetupSection> {
       name: trimmedName,
       partnerId: _selectedPartnerId,
       duration: _duration,
-      startDate: _startDate,
     );
     if (!mounted) return;
 
@@ -371,55 +368,12 @@ class _SetupSectionState extends State<SetupSection> {
       setState(() {
         _selectedPartnerId = null;
         _duration = 30;
-        _startDate = DateTime.now();
-        _initialStartDate = _startDate;
-        _displayedMonth = DateTime(_startDate.year, _startDate.month);
         _loading = false;
       });
     } else if (result is SetupFailure) {
       debugPrint('[SetupSection] Contract creation failed: ${result.message}');
       setState(() => _loading = false);
     }
-  }
-
-  List<List<DateTime>> _calendarWeeks(DateTime month) {
-    final first = DateTime(month.year, month.month, 1);
-    final start = first.subtract(Duration(days: first.weekday % 7));
-    return List.generate(
-      6,
-      (week) => List.generate(7, (day) => start.add(Duration(days: week * 7 + day))),
-    );
-  }
-
-  String _monthLabel(DateTime month) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return '${months[month.month - 1]} ${month.year}';
-  }
-
-  void _changeMonth(int delta) {
-    setState(() {
-      _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + delta);
-    });
-  }
-
-  void _selectDate(DateTime date) {
-    setState(() {
-      _startDate = date;
-      _displayedMonth = DateTime(date.year, date.month);
-    });
   }
 
   @override
@@ -432,7 +386,6 @@ class _SetupSectionState extends State<SetupSection> {
           final rawName = (u['name'] as String?) ?? '';
           return rawName.trim().toLowerCase() != currentName;
         }).toList();
-        final calendarWeeks = _calendarWeeks(_displayedMonth);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -455,7 +408,7 @@ class _SetupSectionState extends State<SetupSection> {
                           color: Color(0xFF3E3E3E),
                         ),
                         decoration: InputDecoration(
-                          hintText: 'username?',
+                          hintText: _isLoginMode ? 'your name?' : 'username?',
                           border: InputBorder.none,
                           hintStyle: const TextStyle(
                             fontFamily: 'SF Pro Display',
@@ -502,166 +455,66 @@ class _SetupSectionState extends State<SetupSection> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _Block(
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'partner?',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Display',
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 14,
-                                  color: Color(0xFF8E8E93),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 90,
-                                child: ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  itemCount: partnerUsers.length,
-                                  itemBuilder: (context, index) {
-                                    final user = partnerUsers[index];
-                                    return _PartnerOption(
-                                      label: user['name'] as String,
-                                      selected: _selectedPartnerId == user['id'],
-                                      onTap: () => setState(
-                                        () => _selectedPartnerId = user['id'] as String,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+              const SizedBox(height: 6),
+              _Block(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'partner?',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Display',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 14,
+                          color: Color(0xFF8E8E93),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _Block(
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    alignment: Alignment.topCenter,
-                                    icon: const Icon(
-                                      Icons.chevron_left,
-                                      size: 18,
-                                      color: Color(0xFF3E3E3E),
-                                    ),
-                                    onPressed: () => _changeMonth(-1),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _monthLabel(_displayedMonth),
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontFamily: 'SF Pro Display',
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 13,
-                                      color: Color(0xFF3E3E3E),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    alignment: Alignment.topCenter,
-                                    icon: const Icon(
-                                      Icons.chevron_right,
-                                      size: 18,
-                                      color: Color(0xFF3E3E3E),
-                                    ),
-                                    onPressed: () => _changeMonth(1),
-                                  ),
-                                ],
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 70,
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          itemCount: partnerUsers.length,
+                          itemBuilder: (context, index) {
+                            final user = partnerUsers[index];
+                            return _PartnerOption(
+                              label: user['name'] as String,
+                              selected: _selectedPartnerId == user['id'],
+                              onTap: () => setState(
+                                () => _selectedPartnerId = user['id'] as String,
                               ),
-                              const SizedBox(height: 2),
-                              SizedBox(
-                                height: 90,
-                                child: Builder(
-                                  builder: (context) {
-                                    return ListView.builder(
-                                      padding: EdgeInsets.zero,
-                                      itemCount: calendarWeeks.length,
-                                      itemBuilder: (context, weekIndex) {
-                                        final week = calendarWeeks[weekIndex];
-                                        return Row(
-                                          children: week.map((day) {
-                                            final inMonth =
-                                                day.month == _displayedMonth.month;
-                                            final isSelected =
-                                                day.year == _startDate.year &&
-                                                day.month == _startDate.month &&
-                                                day.day == _startDate.day;
-                                            return Expanded(
-                                              child: GestureDetector(
-                                                onTap: () => _selectDate(day),
-                                                child: Container(
-                                                  height: 22,
-                                                  margin:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 2,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: isSelected
-                                                        ? const Color(0xFF3E3E3E)
-                                                        : Colors.transparent,
-                                                    borderRadius:
-                                                        BorderRadius.circular(6),
-                                                  ),
-                                                  alignment: Alignment.center,
-                                                  child: Text(
-                                                    '${day.day}',
-                                                    style: TextStyle(
-                                                      fontFamily: 'SF Pro Display',
-                                                      fontWeight: FontWeight.w500,
-                                                      fontSize: 12,
-                                                      color: isSelected
-                                                          ? const Color(0xFFCDCDD0)
-                                                          : inMonth
-                                                              ? const Color(0xFF3E3E3E)
-                                                              : const Color(0xFFB7B7B9),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
+              if (!_accountLocked)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isLoginMode = !_isLoginMode;
+                        _nameController.clear();
+                      });
+                    },
+                    child: Text(
+                      _isLoginMode ? 'sign up' : 'log in',
+                      style: const TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 14,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ),
+                ),
           ],
         );
       },
@@ -822,9 +675,9 @@ class ContractCard extends StatelessWidget {
           ),
           _buildBullet('With ${contract.partnerNames.join(' and ')}'),
           const SizedBox(height: 4),
-          _buildBullet('${contract.daysPassed}/${contract.duration}'),
+          _buildBullet('${contract.progress}/${contract.duration}'),
           const SizedBox(height: 4),
-          _buildBullet('Contract penalties: 0'),
+          _buildBullet('Contract penalties: ${contract.penalties}'),
         ],
       ),
     );
@@ -860,10 +713,12 @@ class ContractCard extends StatelessWidget {
 
 class DailyActionsSection extends StatefulWidget {
   final String userId;
+  final DateTime serverDate;
   final VoidCallback onProgressUpdated;
   const DailyActionsSection({
     super.key,
     required this.userId,
+    required this.serverDate,
     required this.onProgressUpdated,
   });
 
@@ -884,7 +739,7 @@ class _DailyActionsSectionState extends State<DailyActionsSection> {
   }
 
   Future<void> _loadTodayActions() async {
-    final docId = todayDocId(widget.userId);
+    final docId = docIdForDate(widget.userId, widget.serverDate);
     final actions = await getDailyActions(docId);
     if (!mounted) return;
     if (actions != null) {
@@ -905,20 +760,21 @@ class _DailyActionsSectionState extends State<DailyActionsSection> {
       if (key == 'sleep') _sleep = value;
     });
 
-    await saveDailyActions(todayDocId(widget.userId), {
+    await saveDailyActions(docIdForDate(widget.userId, widget.serverDate), {
       'train': _train,
       'nutrition': _nutrition,
       'sleep': _sleep,
     });
-
-    if (_train && _nutrition && _sleep) {
-      setState(() => _completed = true);
-      await completeDailyActions(widget.userId);
-      widget.onProgressUpdated();
-    }
   }
 
-  int get _count => (_train ? 1 : 0) + (_nutrition ? 1 : 0) + (_sleep ? 1 : 0);
+  Future<void> _handleConfirm() async {
+    if (_completed || !_allChecked) return;
+    setState(() => _completed = true);
+    await completeDailyActions(widget.userId);
+    widget.onProgressUpdated();
+  }
+
+  bool get _allChecked => _train && _nutrition && _sleep;
 
   @override
   Widget build(BuildContext context) {
@@ -934,21 +790,25 @@ class _DailyActionsSectionState extends State<DailyActionsSection> {
           ],
         ),
         const Spacer(),
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF3E3E3E), width: 3),
-          ),
-          child: Center(
+        GestureDetector(
+          onTap: _allChecked && !_completed ? _handleConfirm : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            decoration: BoxDecoration(
+              color: _allChecked && !_completed
+                  ? const Color(0xFF3E3E3E)
+                  : _surfaceColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Text(
-              '$_count/3',
-              style: const TextStyle(
+              _completed ? 'Done' : 'Confirm',
+              style: TextStyle(
                 fontFamily: 'SF Pro Display',
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: Color(0xFF3E3E3E),
+                fontSize: 15,
+                color: _allChecked && !_completed
+                    ? const Color(0xFFCDCDD0)
+                    : const Color(0xFF8E8E93),
               ),
             ),
           ),
