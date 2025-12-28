@@ -1,20 +1,18 @@
 # ui/
 
-User interface layer containing Flutter widgets.
+Presentation layer - renders and collects input.
+
+## Rules (per A.md)
+- Calls Logic, never Services directly
+- Contains NO business rules or IO
+- Local UI state stays local
 
 ## Files
 
-- **app.dart** - Main app widget (`MyApp`), `HomePage`, `SetupDialog`, and `ContractCard` widgets
+- **app.dart** - `MyApp` entry point
+- **home_page.dart** - `HomePage` main screen with bottom bar handle
+- **bottom_sheet.dart** - `BottomSheetContent` modal (Duration, Partner selection)
 
-## Patterns
+## Current State
 
-- StatelessWidget for simple display (`MyApp`, `ContractCard`)
-- StatefulWidget for interactive components (`HomePage`, `SetupDialog`)
-- Dialog pattern for user setup flow
-- GridView for displaying contract cards
-
-## Styling
-
-- Custom font: SF Pro Display
-- Primary color scheme: Grey tones (0xFFC8C8C8 background, 0xFF3E3E3E text)
-- Card shadows with blur radius 18
+Bottom sheet UI implemented. Top widgets pending.

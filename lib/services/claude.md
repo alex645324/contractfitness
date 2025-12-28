@@ -1,23 +1,15 @@
 # services/
 
-External service integrations layer.
+IO layer - reads/writes data, calls APIs/SDKs.
+
+## Rules (per A.md)
+- Contains NO product decisions
+- Only called by Logic, never UI directly
 
 ## Files
 
-- **firebase_service.dart** - Firestore database operations
+- **firebase_service.dart** - Cleared for fresh start
 
-## Functions
+## Current State
 
-### Users
-- `createUser(name)` - Creates user document, returns doc ID
-- `getUsers()` - Returns all users with IDs
-- `getUsersByIds(userIds)` - Batch fetch users by document IDs
-
-### Contracts
-- `createContract(userIds, duration)` - Creates contract and updates user documents with contract reference
-- `getContractsByUserId(userId)` - Queries contracts containing the user
-
-## Firestore Collections
-
-- `users` - User documents with name, createdAt, contractIds
-- `contracts` - Contract documents with userIds, duration, createdAt
+Blank slate - ready for new service functions.

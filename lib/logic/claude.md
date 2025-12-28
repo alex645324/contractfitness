@@ -1,22 +1,16 @@
 # logic/
 
-Business logic layer handling data transformation and validation.
+Core decisions layer - validates, applies rules, orchestrates.
+
+## Rules (per A.md)
+- Contains NO UI or vendor code
+- Shared state lives here
+- Returns Success(data) or Failure(code, message)
 
 ## Files
 
-- **setup_logic.dart** - Setup flow logic and contract retrieval
+- **setup_logic.dart** - Cleared for fresh start
 
-## Classes
+## Current State
 
-### Result Types (Sealed Classes)
-- `SetupResult` - Base for setup outcomes
-  - `SetupSuccess` - Contains userId and optional contractId
-  - `SetupFailure` - Contains error message
-- `ContractResult` - Base for contract query outcomes
-  - `ContractSuccess` - Contains contract display data (id, title, partnerNames, daysPassed, duration)
-  - `ContractNotFound` - No active contract found
-
-## Functions
-
-- `submitSetup()` - Validates input, creates user, optionally creates contract
-- `getActiveContract()` - Retrieves and formats active contract for display
+Blank slate - ready for new logic.

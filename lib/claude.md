@@ -1,15 +1,18 @@
 # lib/
 
-Main source code directory for the Contract Fitness Flutter app.
+Contract Fitness Flutter app - Fresh Start
 
-## Architecture
+## Architecture (per A.md)
 
-Three-layer architecture:
-- **ui/** - Flutter widgets and UI components
-- **logic/** - Business logic and data models
-- **services/** - External service integrations (Firebase)
-- **fonts/** - Custom font assets (SF Pro Display)
+Three layers only:
+- **ui/** - Input & output (renders, collects input, calls Logic)
+- **logic/** - Decisions & rules (validates, applies rules, orchestrates)
+- **services/** - Side effects (reads/writes data, calls APIs)
 
 ## Entry Point
 
-`main.dart` initializes Firebase and runs `MyApp` from `ui/app.dart`.
+`main.dart` - Initializes Firebase, runs `MyApp`
+
+## Current State
+
+Blank slate - ready for new features.
