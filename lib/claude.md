@@ -15,4 +15,4 @@ Three layers only:
 
 ## Current State
 
-Blank slate - ready for new features.
+Auth flow (sign up/log in), contract creation, and scaled contract display with dot board and responsive task indicators implemented.

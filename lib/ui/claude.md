@@ -15,4 +15,4 @@ Presentation layer - renders and collects input.
 
 ## Current State
 
-Bottom sheet UI implemented. Top widgets pending.
+Bottom sheet UI implemented. Contract widget scaled down (0.8x) with dot board (30-day calendar) and responsive task indicators (Eating, Lifting hard, Sleeping smart). Task indicators use flexible spacing to adapt to widget width.

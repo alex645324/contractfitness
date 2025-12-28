@@ -14,15 +14,27 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
   static const _lightGray = Color(0xFFD1D1D1);
 
   int _selectedDuration = 60;
-  String _selectedPartner = 'ALIEEL';
+  String? _selectedPartner;
   String? _selectedAccount;
   final _nameController = TextEditingController();
   bool _hasError = false;
   bool _isSuccess = false;
+  bool _contractError = false;
+  bool _contractSuccess = false;
 
   final List<int> _durations = [60, 90];
-  final List<String> _partners = ['TATI', 'ALIEEL', 'SUNG', 'HARSH'];
   final List<String> _accountOptions = ['SIGN UP', 'LOG IN'];
+
+  bool get _isAuthenticated => logic.currentUserId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isAuthenticated) {
+      _nameController.text = logic.currentUserName ?? '';
+      _isSuccess = true;
+    }
+  }
 
   @override
   void dispose() {
@@ -37,6 +49,15 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
     setState(() {
       _hasError = !result.success;
       _isSuccess = result.success;
+    });
+  }
+
+  Future<void> _onContractConfirm() async {
+    if (!_isAuthenticated || _selectedPartner == null) return;
+    final result = await logic.createContract(_selectedDuration, _selectedPartner!);
+    setState(() {
+      _contractError = !result.success;
+      _contractSuccess = result.success;
     });
   }
 
@@ -97,7 +118,7 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
               ),
             ),
           ))),
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
 
           // Partner section
           const Text(
@@ -109,21 +130,66 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 72, // Shows ~3 items
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: _partners.map((p) => GestureDetector(
-                onTap: () => setState(() => _selectedPartner = p),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    p,
-                    style: _optionStyle(isSelected: _selectedPartner == p),
-                  ),
-                ),
-              )).toList(),
-            ),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: logic.getUsers(),
+            builder: (context, snapshot) {
+              final users = snapshot.data ?? [];
+              final displayUsers = users.take(3).toList();
+              if (displayUsers.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...displayUsers.take(2).map((u) => GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedPartner = u['name'] as String;
+                      _contractError = false;
+                      _contractSuccess = false;
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        (u['name'] as String).toUpperCase(),
+                        style: _optionStyle(isSelected: _selectedPartner == u['name']),
+                      ),
+                    ),
+                  )),
+                  if (displayUsers.length >= 3)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() {
+                                _selectedPartner = displayUsers[2]['name'] as String;
+                                _contractError = false;
+                                _contractSuccess = false;
+                              }),
+                              child: Text(
+                                (displayUsers[2]['name'] as String).toUpperCase(),
+                                style: _optionStyle(isSelected: _selectedPartner == displayUsers[2]['name']),
+                              ),
+                            ),
+                          ),
+                          if (_isAuthenticated)
+                            GestureDetector(
+                              onTap: _onContractConfirm,
+                              child: Text(
+                                'CONFIRM',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _contractError ? Colors.red : (_contractSuccess ? Colors.green : _lightGray),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 32),
 
@@ -137,16 +203,17 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
             ),
           ),
           const SizedBox(height: 8),
-          ...(_accountOptions.map((a) => GestureDetector(
-            onTap: () => setState(() => _selectedAccount = a),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                a,
-                style: _optionStyle(isSelected: _selectedAccount == a),
+          if (!_isAuthenticated)
+            ...(_accountOptions.map((a) => GestureDetector(
+              onTap: () => setState(() => _selectedAccount = a),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  a,
+                  style: _optionStyle(isSelected: _selectedAccount == a),
+                ),
               ),
-            ),
-          ))),
+            ))),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -155,6 +222,7 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
                   child: TextField(
                     controller: _nameController,
                     textCapitalization: TextCapitalization.characters,
+                    enabled: !_isAuthenticated,
                     onChanged: (_) => setState(() {
                       _hasError = false;
                       _isSuccess = false;
@@ -176,7 +244,7 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: _onConfirm,
+                  onTap: _isAuthenticated ? null : _onConfirm,
                   child: Text(
                     'CONFIRM',
                     style: TextStyle(
