@@ -16,6 +16,8 @@ class _HomePageState extends State<HomePage> {
   static const _lightDot = Color(0xFFD1D1D1);
   bool _isSheetOpen = false;
   int _expandedIndex = -1;
+  final Set<String> _crossedTasks = {};
+  final Map<String, String> _partnerNames = {};
 
   Widget _buildDot(bool isDark) {
     return Container(
@@ -29,35 +31,41 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildTaskIndicator(String label) {
-    return SizedBox(
-      height: 18,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: const BoxDecoration(
-              color: _lightDot,
-              shape: BoxShape.circle,
+  Widget _buildTaskIndicator(String label, {required bool isCrossed, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        height: 18,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: _lightDot,
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
-          const SizedBox(width: 13),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: _lightDot,
+            const SizedBox(width: 13),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: _lightDot,
+                decoration: isCrossed ? TextDecoration.lineThrough : TextDecoration.none,
+                decorationColor: _darkDot,
+                decorationThickness: 2,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeaderRow() {
+  Widget _buildHeaderRow(int duration) {
     return Row(
       children: [
         const Text(
@@ -69,9 +77,9 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(width: 80),
-        const Text(
-          '55%.',
-          style: TextStyle(
+        Text(
+          '0/$duration.',
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Color(0xFFD1D1D1),
@@ -79,6 +87,14 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  void _resolvePartnerName(String partnerId) async {
+    if (_partnerNames.containsKey(partnerId)) return;
+    final name = await logic.getUserName(partnerId);
+    if (name != null && mounted) {
+      setState(() => _partnerNames[partnerId] = name);
+    }
   }
 
   void _showBottomSheet() {
@@ -98,6 +114,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildContractWidget(Map<String, dynamic> contract, int index, bool isExpanded, int expandedIdx, bool isLast) {
+    final duration = contract['duration'] as int? ?? 90;
+    final tasks = (contract['tasks'] as List<dynamic>?)?.cast<String>() ?? ['Task 1', 'Task 2', 'Task 3'];
+    final partnerId = contract['partnerId'] as String? ?? '';
+    _resolvePartnerName(partnerId);
+    final partnerName = _partnerNames[partnerId]?.toUpperCase() ?? '';
+
     final card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 22),
       padding: EdgeInsets.fromLTRB(24, 16, 24, isExpanded ? 0 : 16),
@@ -131,7 +153,7 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Transform.translate(
                         offset: const Offset(0, -12),
-                        child: _buildHeaderRow(),
+                        child: _buildHeaderRow(duration),
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -170,11 +192,21 @@ class _HomePageState extends State<HomePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildTaskIndicator('Eating'),
+                                _buildTaskIndicator(tasks[0], isCrossed: _crossedTasks.contains(tasks[0]), onTap: () => setState(() {
+                                  _crossedTasks.contains(tasks[0]) ? _crossedTasks.remove(tasks[0]) : _crossedTasks.add(tasks[0]);
+                                })),
                                 const SizedBox(height: 2),
-                                _buildTaskIndicator('Lifting hard'),
+                                _buildTaskIndicator(tasks.length > 1 ? tasks[1] : '', isCrossed: _crossedTasks.contains(tasks.length > 1 ? tasks[1] : ''), onTap: () => setState(() {
+                                  if (tasks.length > 1) {
+                                    _crossedTasks.contains(tasks[1]) ? _crossedTasks.remove(tasks[1]) : _crossedTasks.add(tasks[1]);
+                                  }
+                                })),
                                 const SizedBox(height: 2),
-                                _buildTaskIndicator('Sleeping smart'),
+                                _buildTaskIndicator(tasks.length > 2 ? tasks[2] : '', isCrossed: _crossedTasks.contains(tasks.length > 2 ? tasks[2] : ''), onTap: () => setState(() {
+                                  if (tasks.length > 2) {
+                                    _crossedTasks.contains(tasks[2]) ? _crossedTasks.remove(tasks[2]) : _crossedTasks.add(tasks[2]);
+                                  }
+                                })),
                               ],
                             ),
                           ),
@@ -184,7 +216,7 @@ class _HomePageState extends State<HomePage> {
                       Transform.translate(
                         offset: const Offset(0, 8),
                         child: Text(
-                          'PARTNER. ${['ALIEEL', 'MARCO', 'SARAH', 'JAKE'][index % 4]}',
+                          'PARTNER. $partnerName',
                           style: const TextStyle(
                             fontSize: 16,
                             color: _lightDot,
@@ -200,7 +232,7 @@ class _HomePageState extends State<HomePage> {
                 child: Transform.scale(
                   scale: 0.8,
                   alignment: Alignment.centerLeft,
-                  child: _buildHeaderRow(),
+                  child: _buildHeaderRow(duration),
                 ),
               ),
     );

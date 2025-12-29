@@ -30,7 +30,7 @@ Future<({bool success, String? error})> authenticate(String name, bool isSignUp)
   }
 }
 
-Future<({bool success, String? error})> createContract(int duration, String partnerName) async {
+Future<({bool success, String? error})> createContract(int duration, String partnerName, List<String> tasks) async {
   if (currentUserId == null) {
     return (success: false, error: 'not_authenticated');
   }
@@ -40,9 +40,17 @@ Future<({bool success, String? error})> createContract(int duration, String part
     return (success: false, error: 'partner_not_found');
   }
 
-  final contractId = await svc.createContract(currentUserId!, partnerId, duration);
+  final contractId = await svc.createContract(currentUserId!, partnerId, duration, tasks);
   currentContractId = contractId;
   return (success: true, error: null);
+}
+
+Future<bool> userExists(String name) async {
+  return await svc.userExists(name);
+}
+
+Future<String?> getUserName(String userId) async {
+  return await svc.getUserName(userId);
 }
 
 Stream<List<Map<String, dynamic>>> getUserContracts() {

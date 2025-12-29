@@ -13,16 +13,23 @@ Future<String?> getUserId(String name) async {
   return snapshot.docs.isEmpty ? null : snapshot.docs.first.id;
 }
 
+Future<String?> getUserName(String userId) async {
+  final doc = await _users.doc(userId).get();
+  if (!doc.exists) return null;
+  return doc.data()?['name'] as String?;
+}
+
 Future<String> createUser(String name) async {
   final doc = await _users.add({'name': name});
   return doc.id;
 }
 
-Future<String> createContract(String creatorId, String partnerId, int duration) async {
+Future<String> createContract(String creatorId, String partnerId, int duration, List<String> tasks) async {
   final contract = await _contracts.add({
     'creatorId': creatorId,
     'partnerId': partnerId,
     'duration': duration,
+    'tasks': tasks,
     'createdAt': FieldValue.serverTimestamp(),
   });
 

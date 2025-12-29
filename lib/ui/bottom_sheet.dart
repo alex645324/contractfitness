@@ -17,7 +17,12 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
   String? _selectedPartner;
   String? _selectedAccount;
   final _nameController = TextEditingController();
+  final _task1Controller = TextEditingController();
+  final _task2Controller = TextEditingController();
+  final _task3Controller = TextEditingController();
+  final _partnerController = TextEditingController();
   bool _hasError = false;
+  bool _partnerError = false;
   bool _isSuccess = false;
   bool _contractError = false;
   bool _contractSuccess = false;
@@ -39,6 +44,10 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
   @override
   void dispose() {
     _nameController.dispose();
+    _task1Controller.dispose();
+    _task2Controller.dispose();
+    _task3Controller.dispose();
+    _partnerController.dispose();
     super.dispose();
   }
 
@@ -52,9 +61,33 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
     });
   }
 
+  Future<void> _onPartnerFind() async {
+    final name = _partnerController.text.trim();
+    if (name.isEmpty) return;
+    final exists = await logic.userExists(name);
+    setState(() {
+      _partnerError = !exists;
+      _selectedPartner = exists ? name : null;
+    });
+  }
+
   Future<void> _onContractConfirm() async {
-    if (!_isAuthenticated || _selectedPartner == null) return;
-    final result = await logic.createContract(_selectedDuration, _selectedPartner!);
+    final tasks = [
+      _task1Controller.text.trim(),
+      _task2Controller.text.trim(),
+      _task3Controller.text.trim(),
+    ];
+    final allTasksFilled = tasks.every((t) => t.isNotEmpty);
+
+    if (!_isAuthenticated || _selectedPartner == null || !allTasksFilled) {
+      setState(() {
+        _contractError = true;
+        _contractSuccess = false;
+      });
+      return;
+    }
+
+    final result = await logic.createContract(_selectedDuration, _selectedPartner!, tasks);
     setState(() {
       _contractError = !result.success;
       _contractSuccess = result.success;
@@ -120,6 +153,63 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
           ))),
           const SizedBox(height: 20),
 
+          // Tasks section
+          const Text(
+            'Tasks.',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: _darkColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: TextField(
+              controller: _task1Controller,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 16, color: _darkColor),
+              decoration: const InputDecoration(
+                hintText: 'TASK 1',
+                hintStyle: TextStyle(fontSize: 16, color: _lightGray),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: TextField(
+              controller: _task2Controller,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 16, color: _darkColor),
+              decoration: const InputDecoration(
+                hintText: 'TASK 2',
+                hintStyle: TextStyle(fontSize: 16, color: _lightGray),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: TextField(
+              controller: _task3Controller,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 16, color: _darkColor),
+              decoration: const InputDecoration(
+                hintText: 'TASK 3',
+                hintStyle: TextStyle(fontSize: 16, color: _lightGray),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // Partner section
           const Text(
             'Partner.',
@@ -130,66 +220,62 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
             ),
           ),
           const SizedBox(height: 8),
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: logic.getUsers(),
-            builder: (context, snapshot) {
-              final users = snapshot.data ?? [];
-              final displayUsers = users.take(3).toList();
-              if (displayUsers.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...displayUsers.take(2).map((u) => GestureDetector(
-                    onTap: () => setState(() {
-                      _selectedPartner = u['name'] as String;
-                      _contractError = false;
-                      _contractSuccess = false;
-                    }),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        (u['name'] as String).toUpperCase(),
-                        style: _optionStyle(isSelected: _selectedPartner == u['name']),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: TextField(
+              controller: _partnerController,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (_) => setState(() {
+                _partnerError = false;
+                _selectedPartner = null;
+                _contractError = false;
+                _contractSuccess = false;
+              }),
+              style: TextStyle(
+                fontSize: 16,
+                color: _partnerError ? Colors.red : (_selectedPartner != null ? Colors.green : _darkColor),
+              ),
+              decoration: InputDecoration(
+                hintText: 'FIND',
+                hintStyle: TextStyle(
+                  fontSize: 16,
+                  color: _partnerError ? Colors.red : _lightGray,
+                ),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _onPartnerFind,
+                    child: Text(
+                      'THIS FUCKER',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _partnerError ? Colors.red : (_selectedPartner != null ? Colors.green : _lightGray),
                       ),
                     ),
-                  )),
-                  if (displayUsers.length >= 3)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() {
-                                _selectedPartner = displayUsers[2]['name'] as String;
-                                _contractError = false;
-                                _contractSuccess = false;
-                              }),
-                              child: Text(
-                                (displayUsers[2]['name'] as String).toUpperCase(),
-                                style: _optionStyle(isSelected: _selectedPartner == displayUsers[2]['name']),
-                              ),
-                            ),
-                          ),
-                          if (_isAuthenticated)
-                            GestureDetector(
-                              onTap: _onContractConfirm,
-                              child: Text(
-                                'CONFIRM',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: _contractError ? Colors.red : (_contractSuccess ? Colors.green : _lightGray),
-                                ),
-                              ),
-                            ),
-                        ],
+                  ),
+                ),
+                if (_isAuthenticated)
+                  GestureDetector(
+                    onTap: _onContractConfirm,
+                    child: Text(
+                      'CONFIRM',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _contractError ? Colors.red : (_contractSuccess ? Colors.green : _lightGray),
                       ),
                     ),
-                ],
-              );
-            },
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 32),
 
