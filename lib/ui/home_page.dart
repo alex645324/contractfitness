@@ -15,6 +15,7 @@ class _HomePageState extends State<HomePage> {
   static const _darkDot = Color(0xFF545454);
   static const _lightDot = Color(0xFFD1D1D1);
   bool _isSheetOpen = false;
+  int _expandedIndex = -1;
 
   Widget _buildDot(bool isDark) {
     return Container(
@@ -56,6 +57,30 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildHeaderRow() {
+    return Row(
+      children: [
+        const Text(
+          'DAY.',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF545454),
+          ),
+        ),
+        const SizedBox(width: 80),
+        const Text(
+          '55%.',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFD1D1D1),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showBottomSheet() {
     setState(() => _isSheetOpen = true);
     showModalBottomSheet(
@@ -72,118 +97,119 @@ class _HomePageState extends State<HomePage> {
     ).whenComplete(() => setState(() => _isSheetOpen = false));
   }
 
-  Widget _buildContractWidget(Map<String, dynamic> contract) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 22),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: _shadowColor.withValues(alpha: 0.25),
-            offset: Offset.zero,
-            blurRadius: 60,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Transform.scale(
-        scale: 0.8,
-        alignment: Alignment.topLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Transform.translate(
-              offset: const Offset(0, -8),
-              child: Row(
-                children: [
-                  const Text(
-                    'DAY.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF545454),
-                    ),
-                  ),
-                  const SizedBox(width: 80),
-                  const Text(
-                    '55%.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFD1D1D1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Dot board and task indicators
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Dot board - 30 days, 7 per row
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Row 1: 7 dark
-                    Row(
-                      children: List.generate(7, (_) => _buildDot(true)),
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 2: 7 dark
-                    Row(
-                      children: List.generate(7, (_) => _buildDot(true)),
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 3: 3 dark, 4 light
-                    Row(
-                      children: [
-                        ...List.generate(3, (_) => _buildDot(true)),
-                        ...List.generate(4, (_) => _buildDot(false)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 4: 7 light
-                    Row(
-                      children: List.generate(7, (_) => _buildDot(false)),
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 5: 2 light
-                    Row(
-                      children: List.generate(2, (_) => _buildDot(false)),
-                    ),
-                  ],
+  Widget _buildContractWidget(Map<String, dynamic> contract, int index, bool isExpanded, int expandedIdx) {
+    final card = Container(
+      margin: const EdgeInsets.symmetric(horizontal: 22),
+      padding: EdgeInsets.fromLTRB(24, 16, 24, isExpanded ? 0 : 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: isExpanded
+              ? BorderRadius.circular(16)
+              : const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
                 ),
-                const Expanded(child: SizedBox()),
-                // Task indicators
-                Transform.translate(
-                  offset: const Offset(53, -4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTaskIndicator('Eating'),
-                      const SizedBox(height: 2),
-                      _buildTaskIndicator('Lifting hard'),
-                      const SizedBox(height: 2),
-                      _buildTaskIndicator('Sleeping smart'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'PARTNER. ALIEEL',
-              style: TextStyle(
-                fontSize: 16,
-                color: _lightDot,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: _shadowColor.withValues(alpha: 0.25),
+              offset: Offset.zero,
+              blurRadius: 60,
+              spreadRadius: 1,
             ),
           ],
         ),
-      ),
+        child: isExpanded
+            ? Transform.scale(
+                scale: 0.8,
+                alignment: Alignment.topLeft,
+                child: Transform.translate(
+                  offset: const Offset(0, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Transform.translate(
+                        offset: const Offset(0, -12),
+                        child: _buildHeaderRow(),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: List.generate(7, (_) => _buildDot(true)),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: List.generate(7, (_) => _buildDot(true)),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  ...List.generate(3, (_) => _buildDot(true)),
+                                  ...List.generate(4, (_) => _buildDot(false)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: List.generate(7, (_) => _buildDot(false)),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: List.generate(2, (_) => _buildDot(false)),
+                              ),
+                            ],
+                          ),
+                          const Expanded(child: SizedBox()),
+                          Transform.translate(
+                            offset: const Offset(53, -4),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildTaskIndicator('Eating'),
+                                const SizedBox(height: 2),
+                                _buildTaskIndicator('Lifting hard'),
+                                const SizedBox(height: 2),
+                                _buildTaskIndicator('Sleeping smart'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Transform.translate(
+                        offset: const Offset(0, 8),
+                        child: Text(
+                          'PARTNER. ${['ALIEEL', 'MARCO', 'SARAH', 'JAKE'][index % 4]}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: _lightDot,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Transform.translate(
+                offset: const Offset(0, -6),
+                child: Transform.scale(
+                  scale: 0.8,
+                  alignment: Alignment.centerLeft,
+                  child: _buildHeaderRow(),
+                ),
+              ),
+    );
+    return GestureDetector(
+      onTap: () => setState(() => _expandedIndex = isExpanded ? -1 : index),
+      child: isExpanded
+          ? card
+          : Transform.translate(
+              offset: Offset(0, 12.0 * (expandedIdx - index)),
+              child: card,
+            ),
     );
   }
 
@@ -199,9 +225,16 @@ class _HomePageState extends State<HomePage> {
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const SizedBox.expand();
                 }
+                final contracts = snapshot.data!.reversed.toList();
+                final expandedIdx = _expandedIndex < 0
+                    ? contracts.length - 1
+                    : (_expandedIndex >= contracts.length ? contracts.length - 1 : _expandedIndex);
                 return ListView(
-                  padding: const EdgeInsets.only(top: 100),
-                  children: snapshot.data!.map(_buildContractWidget).toList(),
+                  padding: const EdgeInsets.only(top: 40),
+                  children: [
+                    for (int i = 0; i < contracts.length; i++)
+                      _buildContractWidget(contracts[i], i, i == expandedIdx, expandedIdx),
+                  ],
                 );
               },
             ),

@@ -10,9 +10,9 @@ Presentation layer - renders and collects input.
 ## Files
 
 - **app.dart** - `MyApp` entry point
-- **home_page.dart** - `HomePage` main screen with bottom bar handle
+- **home_page.dart** - `HomePage` main screen with stacked contracts and bottom bar handle
 - **bottom_sheet.dart** - `BottomSheetContent` modal (Duration, Partner selection)
 
 ## Current State
 
-Bottom sheet UI implemented. Contract widget scaled down (0.8x) with dot board (30-day calendar) and responsive task indicators (Eating, Lifting hard, Sleeping smart). Task indicators use flexible spacing to adapt to widget width.
+Stacked contract widgets implemented. Multiple contracts display as a deck with collapsed cards (showing only DAY. and percentage) stacked above the expanded card (full content with dot board, tasks, PARTNER). Tap to expand/collapse. Last contract (bottom) expanded by default. List reversed so newest contracts appear first.

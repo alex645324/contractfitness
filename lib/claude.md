@@ -15,4 +15,4 @@ Three layers only:
 
 ## Current State
 
-Auth flow (sign up/log in), contract creation, and scaled contract display with dot board and responsive task indicators implemented.
+Auth flow (sign up/log in), contract creation, and stacked contract display with tap-to-expand/collapse behavior implemented.
