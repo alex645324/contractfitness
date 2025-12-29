@@ -97,7 +97,7 @@ class _HomePageState extends State<HomePage> {
     ).whenComplete(() => setState(() => _isSheetOpen = false));
   }
 
-  Widget _buildContractWidget(Map<String, dynamic> contract, int index, bool isExpanded, int expandedIdx) {
+  Widget _buildContractWidget(Map<String, dynamic> contract, int index, bool isExpanded, int expandedIdx, bool isLast) {
     final card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 22),
       padding: EdgeInsets.fromLTRB(24, 16, 24, isExpanded ? 0 : 16),
@@ -105,10 +105,12 @@ class _HomePageState extends State<HomePage> {
           color: Colors.white,
           borderRadius: isExpanded
               ? BorderRadius.circular(16)
-              : const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
+              : (isLast
+                  ? BorderRadius.circular(16)
+                  : const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    )),
           boxShadow: [
             BoxShadow(
               color: _shadowColor.withValues(alpha: 0.25),
@@ -233,7 +235,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.only(top: 40),
                   children: [
                     for (int i = 0; i < contracts.length; i++)
-                      _buildContractWidget(contracts[i], i, i == expandedIdx, expandedIdx),
+                      _buildContractWidget(contracts[i], i, i == expandedIdx, expandedIdx, i == contracts.length - 1),
                   ],
                 );
               },
