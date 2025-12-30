@@ -1,6 +1,6 @@
 # lib/
 
-Contract Fitness Flutter app - Fresh Start
+Contract Fitness Flutter app
 
 ## Architecture (per A.md)
 
@@ -15,4 +15,8 @@ Three layers only:
 
 ## Current State
 
-Auth flow (sign up/log in), contract creation, and stacked contract display with tap-to-expand/collapse behavior implemented.
+- Auth flow (sign up/log in)
+- Contract creation with duration (60/90), 3 custom tasks, partner search
+- Stacked contract display with tap-to-expand/collapse
+- Dynamic contract rendering (duration, tasks, partner from saved data)
+- Required field validation before contract creation

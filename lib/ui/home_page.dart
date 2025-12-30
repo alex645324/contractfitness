@@ -16,8 +16,9 @@ class _HomePageState extends State<HomePage> {
   static const _lightDot = Color(0xFFD1D1D1);
   bool _isSheetOpen = false;
   int _expandedIndex = -1;
-  final Set<String> _crossedTasks = {};
+  final Map<String, List<int>> _completedTasks = {};
   final Map<String, String> _partnerNames = {};
+  final Set<String> _evaluatedContracts = {};
 
   Widget _buildDot(bool isDark) {
     return Container(
@@ -65,7 +66,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeaderRow(int duration) {
+  Widget _buildHeaderRow(int daysCompleted, int duration) {
     return Row(
       children: [
         const Text(
@@ -78,7 +79,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(width: 80),
         Text(
-          '0/$duration.',
+          '$daysCompleted/$duration.',
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -95,6 +96,56 @@ class _HomePageState extends State<HomePage> {
     if (name != null && mounted) {
       setState(() => _partnerNames[partnerId] = name);
     }
+  }
+
+  void _loadTaskCompletions(String contractId) async {
+    if (_completedTasks.containsKey(contractId)) return;
+    final tasks = await logic.getCompletedTasks(contractId);
+    if (mounted) {
+      setState(() => _completedTasks[contractId] = tasks);
+    }
+  }
+
+  void _evaluateContract(Map<String, dynamic> contract) async {
+    final contractId = contract['id'] as String;
+    if (_evaluatedContracts.contains(contractId)) return;
+    _evaluatedContracts.add(contractId);
+    await logic.evaluatePendingDays(contract);
+  }
+
+  void _toggleTask(String contractId, int taskIndex) async {
+    await logic.toggleTask(contractId, taskIndex);
+    final tasks = await logic.getCompletedTasks(contractId);
+    if (mounted) {
+      setState(() => _completedTasks[contractId] = tasks);
+    }
+  }
+
+  Widget _buildDotBoard(int daysCompleted) {
+    final page = daysCompleted ~/ 30;
+    final filledOnPage = daysCompleted - (page * 30);
+
+    List<Widget> buildRow(int startIdx, int count) {
+      return List.generate(count, (i) {
+        final dotIdx = startIdx + i;
+        return _buildDot(dotIdx < filledOnPage);
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: buildRow(0, 7)),
+        const SizedBox(height: 10),
+        Row(children: buildRow(7, 7)),
+        const SizedBox(height: 10),
+        Row(children: buildRow(14, 7)),
+        const SizedBox(height: 10),
+        Row(children: buildRow(21, 7)),
+        const SizedBox(height: 10),
+        Row(children: buildRow(28, 2)),
+      ],
+    );
   }
 
   void _showBottomSheet() {
@@ -114,11 +165,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildContractWidget(Map<String, dynamic> contract, int index, bool isExpanded, int expandedIdx, bool isLast) {
+    final contractId = contract['id'] as String;
     final duration = contract['duration'] as int? ?? 90;
+    final daysCompleted = contract['daysCompleted'] as int? ?? 0;
+    final isCompleted = contract['completed'] as bool? ?? false;
     final tasks = (contract['tasks'] as List<dynamic>?)?.cast<String>() ?? ['Task 1', 'Task 2', 'Task 3'];
     final partnerId = contract['partnerId'] as String? ?? '';
     _resolvePartnerName(partnerId);
+    _evaluateContract(contract);
+    _loadTaskCompletions(contractId);
     final partnerName = _partnerNames[partnerId]?.toUpperCase() ?? '';
+    final completedTasks = _completedTasks[contractId] ?? [];
 
     final card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 22),
@@ -153,60 +210,24 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Transform.translate(
                         offset: const Offset(0, -12),
-                        child: _buildHeaderRow(duration),
+                        child: _buildHeaderRow(daysCompleted, duration),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: List.generate(7, (_) => _buildDot(true)),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: List.generate(7, (_) => _buildDot(true)),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  ...List.generate(3, (_) => _buildDot(true)),
-                                  ...List.generate(4, (_) => _buildDot(false)),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: List.generate(7, (_) => _buildDot(false)),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: List.generate(2, (_) => _buildDot(false)),
-                              ),
-                            ],
-                          ),
+                          _buildDotBoard(daysCompleted),
                           const Expanded(child: SizedBox()),
                           Transform.translate(
                             offset: const Offset(53, -4),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildTaskIndicator(tasks[0], isCrossed: _crossedTasks.contains(tasks[0]), onTap: () => setState(() {
-                                  _crossedTasks.contains(tasks[0]) ? _crossedTasks.remove(tasks[0]) : _crossedTasks.add(tasks[0]);
-                                })),
+                                _buildTaskIndicator(tasks[0], isCrossed: completedTasks.contains(0), onTap: isCompleted ? () {} : () => _toggleTask(contractId, 0)),
                                 const SizedBox(height: 2),
-                                _buildTaskIndicator(tasks.length > 1 ? tasks[1] : '', isCrossed: _crossedTasks.contains(tasks.length > 1 ? tasks[1] : ''), onTap: () => setState(() {
-                                  if (tasks.length > 1) {
-                                    _crossedTasks.contains(tasks[1]) ? _crossedTasks.remove(tasks[1]) : _crossedTasks.add(tasks[1]);
-                                  }
-                                })),
+                                _buildTaskIndicator(tasks.length > 1 ? tasks[1] : '', isCrossed: completedTasks.contains(1), onTap: isCompleted ? () {} : () => _toggleTask(contractId, 1)),
                                 const SizedBox(height: 2),
-                                _buildTaskIndicator(tasks.length > 2 ? tasks[2] : '', isCrossed: _crossedTasks.contains(tasks.length > 2 ? tasks[2] : ''), onTap: () => setState(() {
-                                  if (tasks.length > 2) {
-                                    _crossedTasks.contains(tasks[2]) ? _crossedTasks.remove(tasks[2]) : _crossedTasks.add(tasks[2]);
-                                  }
-                                })),
+                                _buildTaskIndicator(tasks.length > 2 ? tasks[2] : '', isCrossed: completedTasks.contains(2), onTap: isCompleted ? () {} : () => _toggleTask(contractId, 2)),
                               ],
                             ),
                           ),
@@ -232,7 +253,7 @@ class _HomePageState extends State<HomePage> {
                 child: Transform.scale(
                   scale: 0.8,
                   alignment: Alignment.centerLeft,
-                  child: _buildHeaderRow(duration),
+                  child: _buildHeaderRow(daysCompleted, duration),
                 ),
               ),
     );

@@ -31,6 +31,10 @@ Future<String> createContract(String creatorId, String partnerId, int duration, 
     'duration': duration,
     'tasks': tasks,
     'createdAt': FieldValue.serverTimestamp(),
+    'daysCompleted': 0,
+    'lastEvaluatedDate': null,
+    'completed': false,
+    'taskCompletions': {},
   });
 
   final contractRef = {'contractId': contract.id};
@@ -60,4 +64,29 @@ Stream<List<Map<String, dynamic>>> getUsers(String? excludeUserId) {
         .map((doc) => {'id': doc.id, 'name': doc.data()['name'] as String})
         .toList();
   });
+}
+
+Future<List<int>> getTaskCompletions(String contractId, String date, String userId) async {
+  final doc = await _contracts.doc(contractId).get();
+  if (!doc.exists) return [];
+  final completions = doc.data()?['taskCompletions'] as Map<String, dynamic>? ?? {};
+  final dayData = completions[date] as Map<String, dynamic>? ?? {};
+  final userTasks = dayData[userId] as List<dynamic>? ?? [];
+  return userTasks.cast<int>();
+}
+
+Future<void> setTaskCompletions(String contractId, String date, String userId, List<int> indices) async {
+  await _contracts.doc(contractId).update({
+    'taskCompletions.$date.$userId': indices,
+  });
+}
+
+Future<void> updateContractProgress(String contractId, {int? daysCompleted, String? lastEvaluatedDate, bool? completed}) async {
+  final updates = <String, dynamic>{};
+  if (daysCompleted != null) updates['daysCompleted'] = daysCompleted;
+  if (lastEvaluatedDate != null) updates['lastEvaluatedDate'] = lastEvaluatedDate;
+  if (completed != null) updates['completed'] = completed;
+  if (updates.isNotEmpty) {
+    await _contracts.doc(contractId).update(updates);
+  }
 }
