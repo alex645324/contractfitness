@@ -17,9 +17,11 @@ Presentation layer - renders and collects input.
 
 **home_page.dart:**
 - Stacked contract widgets with tap-to-expand/collapse
-- Dynamic rendering: duration (0/60 or 0/90), custom task names, partner name from contract data
-- Clickable tasks with strikethrough toggle
+- Dynamic rendering: daysCompleted/duration, custom task names, partner name from contract data
+- Clickable tasks with strikethrough toggle (persisted to Firebase per user per day)
 - Partner name resolved async from partnerId
+- Dot board with 30 dots per page, pagination based on daysCompleted
+- Evaluates pending days on load (increments daysCompleted if both users completed all tasks)
 
 **bottom_sheet.dart:**
 - Duration: select 60 or 90 (strikethrough selection)
@@ -27,3 +29,4 @@ Presentation layer - renders and collects input.
 - Partner: FIND input + THIS FUCKER to confirm partner exists
 - Account: SIGN UP / LOG IN + NAME input + CONFIRM
 - Validation: all fields required, Confirm turns red on failure
+- `_isCreating` lock prevents duplicate contract creation from multi-tap

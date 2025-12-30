@@ -26,6 +26,7 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
   bool _isSuccess = false;
   bool _contractError = false;
   bool _contractSuccess = false;
+  bool _isCreating = false;
 
   final List<int> _durations = [60, 90];
   final List<String> _accountOptions = ['SIGN UP', 'LOG IN'];
@@ -72,6 +73,8 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
   }
 
   Future<void> _onContractConfirm() async {
+    if (_isCreating) return;
+
     final tasks = [
       _task1Controller.text.trim(),
       _task2Controller.text.trim(),
@@ -87,7 +90,9 @@ class _BottomSheetContentState extends State<BottomSheetContent> {
       return;
     }
 
+    _isCreating = true;
     final result = await logic.createContract(_selectedDuration, _selectedPartner!, tasks);
+    _isCreating = false;
     setState(() {
       _contractError = !result.success;
       _contractSuccess = result.success;

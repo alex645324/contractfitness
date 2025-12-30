@@ -24,24 +24,36 @@ Future<String> createUser(String name) async {
   return doc.id;
 }
 
-Future<String> createContract(String creatorId, String partnerId, int duration, List<String> tasks) async {
-  final contract = await _contracts.add({
-    'creatorId': creatorId,
-    'partnerId': partnerId,
-    'duration': duration,
-    'tasks': tasks,
-    'createdAt': FieldValue.serverTimestamp(),
-    'daysCompleted': 0,
-    'lastEvaluatedDate': null,
-    'completed': false,
-    'taskCompletions': {},
+Future<String?> createContract(String creatorId, String partnerId, int duration, List<String> tasks, String pairKey) async {
+  final db = FirebaseFirestore.instance;
+  final contractRef = _contracts.doc(pairKey);
+
+  final result = await db.runTransaction<String?>((transaction) async {
+    final doc = await transaction.get(contractRef);
+    if (doc.exists) return null;
+
+    transaction.set(contractRef, {
+      'creatorId': creatorId,
+      'partnerId': partnerId,
+      'duration': duration,
+      'tasks': tasks,
+      'createdAt': FieldValue.serverTimestamp(),
+      'daysCompleted': 0,
+      'lastEvaluatedDate': null,
+      'completed': false,
+      'taskCompletions': {},
+    });
+
+    return pairKey;
   });
 
-  final contractRef = {'contractId': contract.id};
-  await _users.doc(creatorId).collection('contracts').doc(contract.id).set(contractRef);
-  await _users.doc(partnerId).collection('contracts').doc(contract.id).set(contractRef);
+  if (result == null) return null;
 
-  return contract.id;
+  final userContractRef = {'contractId': pairKey};
+  await _users.doc(creatorId).collection('contracts').doc(pairKey).set(userContractRef);
+  await _users.doc(partnerId).collection('contracts').doc(pairKey).set(userContractRef);
+
+  return pairKey;
 }
 
 Stream<List<Map<String, dynamic>>> getUserContracts(String userId) {
@@ -89,4 +101,42 @@ Future<void> updateContractProgress(String contractId, {int? daysCompleted, Stri
   if (updates.isNotEmpty) {
     await _contracts.doc(contractId).update(updates);
   }
+}
+
+final _system = FirebaseFirestore.instance.collection('system');
+
+Future<({String? lastDate, String time})> getGlobalEvaluationConfig() async {
+  final doc = await _system.doc('evaluation').get();
+  if (!doc.exists) return (lastDate: null, time: '12:00 AM');
+  final data = doc.data();
+  return (
+    lastDate: data?['lastEvaluatedDate'] as String?,
+    time: data?['evaluationTime'] as String? ?? '12:00 AM',
+  );
+}
+
+Future<bool> claimGlobalEvaluation(String today) async {
+  final db = FirebaseFirestore.instance;
+  final evalRef = _system.doc('evaluation');
+
+  final claimed = await db.runTransaction<bool>((transaction) async {
+    final doc = await transaction.get(evalRef);
+    if (doc.exists) {
+      final data = doc.data();
+      final lastDate = data?['lastEvaluatedDate'] as String?;
+      if (lastDate == today) return false;
+    }
+    transaction.set(evalRef, {
+      'lastEvaluatedDate': today,
+      'evaluationTime': '12:00 AM',
+    });
+    return true;
+  });
+
+  return claimed;
+}
+
+Future<List<Map<String, dynamic>>> fetchAllContracts() async {
+  final snapshot = await _contracts.get();
+  return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
 }

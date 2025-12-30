@@ -20,6 +20,12 @@ class _HomePageState extends State<HomePage> {
   final Map<String, String> _partnerNames = {};
   final Set<String> _evaluatedContracts = {};
 
+  @override
+  void initState() {
+    super.initState();
+    logic.runDailyEvaluation();
+  }
+
   Widget _buildDot(bool isDark) {
     return Container(
       width: 10,
@@ -217,9 +223,9 @@ class _HomePageState extends State<HomePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildDotBoard(daysCompleted),
-                          const Expanded(child: SizedBox()),
+                          const Spacer(),
                           Transform.translate(
-                            offset: const Offset(53, -4),
+                            offset: const Offset(0, -4),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
