@@ -19,9 +19,7 @@ Core decisions layer - validates, applies rules, orchestrates.
 - `createContract(duration, partnerName, tasks)` - generates pairKey (sorted IDs joined with `_`), returns `duplicate` error if contract exists
 - `userExists(name)` - check if user exists (for partner search)
 - `getUserName(userId)` - resolve userId to name
-- `getUserContracts()` - stream user's contracts
+- `getUserContracts()` - stream user's contracts (real-time updates)
 - `getUsers()` - stream all users (excluding current)
 - `getTodayDate()` - returns YYYY-MM-DD string
-- `getCompletedTasks(contractId)` - get today's completed task indices for current user
-- `toggleTask(contractId, taskIndex)` - toggle task completion for today
-- `evaluatePendingDays(contract)` - evaluate all days since lastEvaluatedDate, increment daysCompleted if both users completed all tasks
+- `toggleTask(contractId, taskIndex)` - toggle task, immediately updates daysCompleted if both users complete/uncomplete all tasks

@@ -14,7 +14,6 @@ Future<({bool success, String? error})> authenticate(String name, bool isSignUp)
 
   currentUserId = isSignUp ? await svc.createUser(name) : await svc.getUserId(name);
   currentUserName = name;
-  await runDailyEvaluation();
   return (success: true, error: null);
 }
 
@@ -56,143 +55,56 @@ Stream<List<Map<String, dynamic>>> getUsers() {
   return svc.getUsers(currentUserId);
 }
 
-String _formatDate(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-String getTodayDate() => _formatDate(DateTime.now());
-
-String _getYesterdayDate() => _formatDate(DateTime.now().subtract(const Duration(days: 1)));
-
-int _parseTimeToMinutes(String time) {
-  final parts = time.split(' ');
-  if (parts.length != 2) return 0;
-  final timeParts = parts[0].split(':');
-  if (timeParts.length != 2) return 0;
-  var hours = int.tryParse(timeParts[0]) ?? 0;
-  final minutes = int.tryParse(timeParts[1]) ?? 0;
-  final isPM = parts[1].toUpperCase() == 'PM';
-  if (hours == 12) hours = 0;
-  if (isPM) hours += 12;
-  return hours * 60 + minutes;
-}
-
-int _getCurrentTimeMinutes() {
-  final now = DateTime.now();
-  return now.hour * 60 + now.minute;
-}
-
-Future<List<int>> getCompletedTasks(String contractId) async {
-  if (currentUserId == null) return [];
-  return await svc.getTaskCompletions(contractId, getTodayDate(), currentUserId!);
+String getTodayDate() {
+  final d = DateTime.now();
+  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
 Future<void> toggleTask(String contractId, int taskIndex) async {
   if (currentUserId == null) return;
   final today = getTodayDate();
-  final current = await svc.getTaskCompletions(contractId, today, currentUserId!);
-  if (current.contains(taskIndex)) {
-    current.remove(taskIndex);
-  } else {
-    current.add(taskIndex);
-  }
-  await svc.setTaskCompletions(contractId, today, currentUserId!, current);
-}
 
-Future<void> runDailyEvaluation() async {
-  final today = getTodayDate();
-  print('[Eval] Starting evaluation check for $today');
+  // Fetch contract to check completion status
+  final contract = await svc.getContract(contractId);
+  if (contract == null) return;
 
-  final config = await svc.getGlobalEvaluationConfig();
-  print('[Eval] Config: lastDate=${config.lastDate}, time=${config.time}');
-
-  if (config.lastDate == today) {
-    print('[Eval] Already evaluated today, skipping');
-    return;
-  }
-
-  final evalMinutes = _parseTimeToMinutes(config.time);
-  final currentMinutes = _getCurrentTimeMinutes();
-  print('[Eval] Time check: current=$currentMinutes, required=$evalMinutes');
-
-  if (currentMinutes < evalMinutes) {
-    print('[Eval] Too early, skipping');
-    return;
-  }
-
-  final claimed = await svc.claimGlobalEvaluation(today);
-  print('[Eval] Claim result: $claimed');
-
-  if (!claimed) {
-    print('[Eval] Another client claimed, skipping');
-    return;
-  }
-
-  final contracts = await svc.fetchAllContracts();
-  print('[Eval] Evaluating ${contracts.length} contracts');
-
-  for (final contract in contracts) {
-    await evaluatePendingDays(contract);
-  }
-  print('[Eval] Evaluation complete');
-}
-
-Future<void> evaluatePendingDays(Map<String, dynamic> contract) async {
-  final contractId = contract['id'] as String;
-  final createdAt = contract['createdAt'];
-  if (createdAt == null) return;
-
-  final startDate = (createdAt as dynamic).toDate() as DateTime;
-  final duration = contract['duration'] as int? ?? 90;
-  final taskCount = (contract['tasks'] as List<dynamic>?)?.length ?? 3;
   final creatorId = contract['creatorId'] as String;
   final partnerId = contract['partnerId'] as String;
-  var daysCompleted = contract['daysCompleted'] as int? ?? 0;
-  final lastEvaluatedDate = contract['lastEvaluatedDate'] as String?;
+  final taskCount = (contract['tasks'] as List<dynamic>?)?.length ?? 3;
+  final daysCompleted = contract['daysCompleted'] as int? ?? 0;
   final taskCompletions = contract['taskCompletions'] as Map<String, dynamic>? ?? {};
+  final dayData = taskCompletions[today] as Map<String, dynamic>? ?? {};
 
-  final yesterday = _getYesterdayDate();
-  final today = DateTime.now();
-  final daysSinceStart = today.difference(startDate).inDays;
+  // Get both users' completions for today
+  var creatorTasks = (dayData[creatorId] as List<dynamic>?)?.cast<int>().toList() ?? [];
+  var partnerTasks = (dayData[partnerId] as List<dynamic>?)?.cast<int>().toList() ?? [];
 
-  // Contract ended?
-  if (daysSinceStart >= duration) {
-    if (contract['completed'] != true) {
-      await svc.updateContractProgress(contractId, completed: true);
-    }
-  }
+  // Check if day was complete before
+  final wasComplete = creatorTasks.length == taskCount && partnerTasks.length == taskCount;
 
-  // Nothing to evaluate yet (still day 0)
-  if (daysSinceStart < 1) return;
-
-  // Already evaluated up to yesterday
-  if (lastEvaluatedDate == yesterday) return;
-
-  // Find start date for evaluation
-  DateTime evalStart;
-  if (lastEvaluatedDate != null) {
-    final parts = lastEvaluatedDate.split('-');
-    evalStart = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2])).add(const Duration(days: 1));
+  // Toggle current user's task
+  final myTasks = currentUserId == creatorId ? creatorTasks : partnerTasks;
+  if (myTasks.contains(taskIndex)) {
+    myTasks.remove(taskIndex);
   } else {
-    evalStart = startDate.add(const Duration(days: 1));
+    myTasks.add(taskIndex);
+  }
+  await svc.setTaskCompletions(contractId, today, currentUserId!, myTasks);
+
+  // Update references after toggle
+  if (currentUserId == creatorId) {
+    creatorTasks = myTasks;
+  } else {
+    partnerTasks = myTasks;
   }
 
-  // Evaluate each day up to yesterday
-  final yesterdayDate = DateTime.now().subtract(const Duration(days: 1));
-  var current = evalStart;
-  while (!current.isAfter(yesterdayDate) && current.difference(startDate).inDays <= duration) {
-    final dateStr = _formatDate(current);
-    final dayData = taskCompletions[dateStr] as Map<String, dynamic>? ?? {};
-    final creatorTasks = (dayData[creatorId] as List<dynamic>?)?.cast<int>() ?? [];
-    final partnerTasks = (dayData[partnerId] as List<dynamic>?)?.cast<int>() ?? [];
+  // Check if day is complete now
+  final isComplete = creatorTasks.length == taskCount && partnerTasks.length == taskCount;
 
-    final creatorDone = creatorTasks.length == taskCount;
-    final partnerDone = partnerTasks.length == taskCount;
-
-    if (creatorDone && partnerDone) {
-      daysCompleted++;
-    }
-    current = current.add(const Duration(days: 1));
+  // Update daysCompleted if status changed
+  if (isComplete && !wasComplete) {
+    await svc.updateContractProgress(contractId, daysCompleted: daysCompleted + 1);
+  } else if (!isComplete && wasComplete) {
+    await svc.updateContractProgress(contractId, daysCompleted: daysCompleted - 1);
   }
-
-  await svc.updateContractProgress(contractId, daysCompleted: daysCompleted, lastEvaluatedDate: yesterday);
 }

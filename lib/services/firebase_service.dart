@@ -39,7 +39,7 @@ Future<String?> createContract(String creatorId, String partnerId, int duration,
       'tasks': tasks,
       'createdAt': FieldValue.serverTimestamp(),
       'daysCompleted': 0,
-      'lastEvaluatedDate': null,
+      'daysMissed': 0,
       'completed': false,
       'taskCompletions': {},
     });
@@ -57,15 +57,19 @@ Future<String?> createContract(String creatorId, String partnerId, int duration,
 }
 
 Stream<List<Map<String, dynamic>>> getUserContracts(String userId) {
-  return _users.doc(userId).collection('contracts').snapshots().asyncMap((snapshot) async {
-    final contracts = <Map<String, dynamic>>[];
-    for (final doc in snapshot.docs) {
-      final contractDoc = await _contracts.doc(doc.id).get();
-      if (contractDoc.exists) {
-        contracts.add({'id': doc.id, ...contractDoc.data()!});
-      }
+  return _users.doc(userId).collection('contracts').snapshots().asyncExpand((snapshot) {
+    if (snapshot.docs.isEmpty) {
+      return Stream.value(<Map<String, dynamic>>[]);
     }
-    return contracts;
+    final contractIds = snapshot.docs.map((doc) => doc.id).toList();
+    return _contracts
+        .where(FieldPath.documentId, whereIn: contractIds)
+        .snapshots()
+        .map((contractSnapshot) {
+          return contractSnapshot.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .toList();
+        });
   });
 }
 
@@ -78,65 +82,23 @@ Stream<List<Map<String, dynamic>>> getUsers(String? excludeUserId) {
   });
 }
 
-Future<List<int>> getTaskCompletions(String contractId, String date, String userId) async {
-  final doc = await _contracts.doc(contractId).get();
-  if (!doc.exists) return [];
-  final completions = doc.data()?['taskCompletions'] as Map<String, dynamic>? ?? {};
-  final dayData = completions[date] as Map<String, dynamic>? ?? {};
-  final userTasks = dayData[userId] as List<dynamic>? ?? [];
-  return userTasks.cast<int>();
-}
-
 Future<void> setTaskCompletions(String contractId, String date, String userId, List<int> indices) async {
   await _contracts.doc(contractId).update({
     'taskCompletions.$date.$userId': indices,
   });
 }
 
-Future<void> updateContractProgress(String contractId, {int? daysCompleted, String? lastEvaluatedDate, bool? completed}) async {
+Future<void> updateContractProgress(String contractId, {int? daysCompleted, bool? completed}) async {
   final updates = <String, dynamic>{};
   if (daysCompleted != null) updates['daysCompleted'] = daysCompleted;
-  if (lastEvaluatedDate != null) updates['lastEvaluatedDate'] = lastEvaluatedDate;
   if (completed != null) updates['completed'] = completed;
   if (updates.isNotEmpty) {
     await _contracts.doc(contractId).update(updates);
   }
 }
 
-final _system = FirebaseFirestore.instance.collection('system');
-
-Future<({String? lastDate, String time})> getGlobalEvaluationConfig() async {
-  final doc = await _system.doc('evaluation').get();
-  if (!doc.exists) return (lastDate: null, time: '12:00 AM');
-  final data = doc.data();
-  return (
-    lastDate: data?['lastEvaluatedDate'] as String?,
-    time: data?['evaluationTime'] as String? ?? '12:00 AM',
-  );
-}
-
-Future<bool> claimGlobalEvaluation(String today) async {
-  final db = FirebaseFirestore.instance;
-  final evalRef = _system.doc('evaluation');
-
-  final claimed = await db.runTransaction<bool>((transaction) async {
-    final doc = await transaction.get(evalRef);
-    if (doc.exists) {
-      final data = doc.data();
-      final lastDate = data?['lastEvaluatedDate'] as String?;
-      if (lastDate == today) return false;
-    }
-    transaction.set(evalRef, {
-      'lastEvaluatedDate': today,
-      'evaluationTime': '12:00 AM',
-    });
-    return true;
-  });
-
-  return claimed;
-}
-
-Future<List<Map<String, dynamic>>> fetchAllContracts() async {
-  final snapshot = await _contracts.get();
-  return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+Future<Map<String, dynamic>?> getContract(String contractId) async {
+  final doc = await _contracts.doc(contractId).get();
+  if (!doc.exists) return null;
+  return {'id': doc.id, ...doc.data()!};
 }

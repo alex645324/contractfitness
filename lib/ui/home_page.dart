@@ -16,14 +16,11 @@ class _HomePageState extends State<HomePage> {
   static const _lightDot = Color(0xFFD1D1D1);
   bool _isSheetOpen = false;
   int _expandedIndex = -1;
-  final Map<String, List<int>> _completedTasks = {};
   final Map<String, String> _partnerNames = {};
-  final Set<String> _evaluatedContracts = {};
 
   @override
   void initState() {
     super.initState();
-    logic.runDailyEvaluation();
   }
 
   Widget _buildDot(bool isDark) {
@@ -104,27 +101,8 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _loadTaskCompletions(String contractId) async {
-    if (_completedTasks.containsKey(contractId)) return;
-    final tasks = await logic.getCompletedTasks(contractId);
-    if (mounted) {
-      setState(() => _completedTasks[contractId] = tasks);
-    }
-  }
-
-  void _evaluateContract(Map<String, dynamic> contract) async {
-    final contractId = contract['id'] as String;
-    if (_evaluatedContracts.contains(contractId)) return;
-    _evaluatedContracts.add(contractId);
-    await logic.evaluatePendingDays(contract);
-  }
-
   void _toggleTask(String contractId, int taskIndex) async {
     await logic.toggleTask(contractId, taskIndex);
-    final tasks = await logic.getCompletedTasks(contractId);
-    if (mounted) {
-      setState(() => _completedTasks[contractId] = tasks);
-    }
   }
 
   Widget _buildDotBoard(int daysCompleted) {
@@ -178,10 +156,13 @@ class _HomePageState extends State<HomePage> {
     final tasks = (contract['tasks'] as List<dynamic>?)?.cast<String>() ?? ['Task 1', 'Task 2', 'Task 3'];
     final partnerId = contract['partnerId'] as String? ?? '';
     _resolvePartnerName(partnerId);
-    _evaluateContract(contract);
-    _loadTaskCompletions(contractId);
     final partnerName = _partnerNames[partnerId]?.toUpperCase() ?? '';
-    final completedTasks = _completedTasks[contractId] ?? [];
+
+    // Get today's completed tasks from contract stream data
+    final today = logic.getTodayDate();
+    final taskCompletions = contract['taskCompletions'] as Map<String, dynamic>? ?? {};
+    final dayData = taskCompletions[today] as Map<String, dynamic>? ?? {};
+    final completedTasks = (dayData[logic.currentUserId] as List<dynamic>?)?.cast<int>() ?? [];
 
     final card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 22),

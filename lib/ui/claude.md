@@ -21,7 +21,7 @@ Presentation layer - renders and collects input.
 - Clickable tasks with strikethrough toggle (persisted to Firebase per user per day)
 - Partner name resolved async from partnerId
 - Dot board with 30 dots per page, pagination based on daysCompleted
-- Evaluates pending days on load (increments daysCompleted if both users completed all tasks)
+- Real-time updates via StreamBuilder (both users see changes immediately)
 
 **bottom_sheet.dart:**
 - Duration: select 60 or 90 (strikethrough selection)
