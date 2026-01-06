@@ -69,12 +69,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeaderRow(int daysCompleted, int duration) {
+  Widget _buildHeaderRow(int daysCompleted, int duration, {bool isContractEnded = false}) {
     return Row(
       children: [
-        const Text(
-          'DAY.',
-          style: TextStyle(
+        Text(
+          isContractEnded ? 'COMPLETED.' : 'DAY.',
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Color(0xFF545454),
@@ -105,29 +105,35 @@ class _HomePageState extends State<HomePage> {
     await logic.toggleTask(contractId, taskIndex);
   }
 
-  Widget _buildDotBoard(int daysCompleted) {
-    final page = daysCompleted ~/ 30;
-    final filledOnPage = daysCompleted - (page * 30);
+  Widget _buildDotBoard(int dayIndex, DateTime? createdAt, Map<String, dynamic> taskCompletions, String creatorId, String partnerId, int taskCount) {
+    final page = dayIndex ~/ 30;
+    final pageStart = page * 30;
+
+    bool isDayCompleted(int absoluteDayIdx) {
+      if (createdAt == null) return false;
+      final dateStr = logic.getDateForDayIndex(createdAt, absoluteDayIdx);
+      final dayData = taskCompletions[dateStr] as Map<String, dynamic>?;
+      if (dayData == null) return false;
+      final creatorTasks = (dayData[creatorId] as List<dynamic>?)?.length ?? 0;
+      final partnerTasks = (dayData[partnerId] as List<dynamic>?)?.length ?? 0;
+      return creatorTasks == taskCount && partnerTasks == taskCount;
+    }
 
     List<Widget> buildRow(int startIdx, int count) {
       return List.generate(count, (i) {
         final dotIdx = startIdx + i;
-        return _buildDot(dotIdx < filledOnPage);
+        final absoluteDayIdx = pageStart + dotIdx;
+        return _buildDot(isDayCompleted(absoluteDayIdx));
       });
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: buildRow(0, 7)),
-        const SizedBox(height: 10),
-        Row(children: buildRow(7, 7)),
-        const SizedBox(height: 10),
-        Row(children: buildRow(14, 7)),
-        const SizedBox(height: 10),
-        Row(children: buildRow(21, 7)),
-        const SizedBox(height: 10),
-        Row(children: buildRow(28, 2)),
+        for (var i = 0; i < 5; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          Row(children: buildRow(i * 7, i < 4 ? 7 : 2)),
+        ],
       ],
     );
   }
@@ -154,8 +160,16 @@ class _HomePageState extends State<HomePage> {
     final daysCompleted = contract['daysCompleted'] as int? ?? 0;
     final isCompleted = contract['completed'] as bool? ?? false;
     final tasks = (contract['tasks'] as List<dynamic>?)?.cast<String>() ?? ['Task 1', 'Task 2', 'Task 3'];
+    final creatorId = contract['creatorId'] as String? ?? '';
     final partnerId = contract['partnerId'] as String? ?? '';
     _resolvePartnerName(partnerId);
+
+    // Get createdAt and compute dayIndex from calendar days
+    final createdAtRaw = contract['createdAt'];
+    final createdAt = createdAtRaw != null ? (createdAtRaw as dynamic).toDate() as DateTime : null;
+    final rawDayIndex = logic.getDayIndex(createdAt);
+    final isContractEnded = rawDayIndex >= duration;
+    final dayIndex = rawDayIndex.clamp(0, duration - 1);
     final partnerName = _partnerNames[partnerId]?.toUpperCase() ?? '';
 
     // Get today's completed tasks from contract stream data
@@ -197,13 +211,13 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Transform.translate(
                         offset: const Offset(0, -12),
-                        child: _buildHeaderRow(daysCompleted, duration),
+                        child: _buildHeaderRow(daysCompleted, duration, isContractEnded: isContractEnded),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildDotBoard(daysCompleted),
+                          _buildDotBoard(dayIndex, createdAt, taskCompletions, creatorId, partnerId, tasks.length),
                           const Spacer(),
                           Transform.translate(
                             offset: const Offset(0, -4),
@@ -240,7 +254,7 @@ class _HomePageState extends State<HomePage> {
                 child: Transform.scale(
                   scale: 0.8,
                   alignment: Alignment.centerLeft,
-                  child: _buildHeaderRow(daysCompleted, duration),
+                  child: _buildHeaderRow(daysCompleted, duration, isContractEnded: isContractEnded),
                 ),
               ),
     );

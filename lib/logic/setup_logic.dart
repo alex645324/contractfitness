@@ -55,9 +55,22 @@ Stream<List<Map<String, dynamic>>> getUsers() {
   return svc.getUsers(currentUserId);
 }
 
-String getTodayDate() {
-  final d = DateTime.now();
-  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String _formatDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+String getTodayDate() => _formatDate(DateTime.now());
+
+int getDayIndex(DateTime? createdAt) {
+  if (createdAt == null) return 0;
+  final now = DateTime.now();
+  final startDate = DateTime(createdAt.year, createdAt.month, createdAt.day);
+  final today = DateTime(now.year, now.month, now.day);
+  return today.difference(startDate).inDays;
+}
+
+String getDateForDayIndex(DateTime createdAt, int dayIndex) {
+  final d = DateTime(createdAt.year, createdAt.month, createdAt.day).add(Duration(days: dayIndex));
+  return _formatDate(d);
 }
 
 Future<void> toggleTask(String contractId, int taskIndex) async {
